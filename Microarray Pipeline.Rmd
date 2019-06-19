@@ -1,0 +1,188 @@
+---
+title: "Microarray Pipeline"
+author: "Ameek Bhalla"
+toc: 
+output:
+  html_notebook: default
+  html_document:
+    toc: true
+    toc_depth: 2
+    df_print: paged
+bibliography: Microarray references.bib
+---
+
+***
+
+# Useful commands
+
+* Insert a link: `[R Markdown](http://rmarkdown.rstudio.com)`
+* Insert a new chunk: `Ctrl+Alt+I`
+* Execute a code chunk: `Ctrl+Shift+Enter`
+* Preview the html file: `Ctrl+Shift+K`
+* Install Bioconductor:`install.packages("BiocManager")`
+* Install a Bioconductor package:`BiocManager::install("package.name")`
+
+***
+
+# Load Packages
+
+```{r eval=FALSE, include=FALSE}
+library(affy)
+library(annotate)
+library(affyio)
+library(drosophila2.db)
+library(drosophila2cdf)
+library(formatR)
+library(htmltools)
+library(knitr)
+library(markdown)
+library(rmarkdown)
+library(simpleaffy)
+library(tidyverse)
+```
+
+
+
+Load R packages
+```{r, strip.white = T, comment= '##'}
+library(tidyverse)
+#library(c(Matrix, lattice, fdrtool, rpart))
+```
+
+Load Bioconductor packages for analysis of older Affymetrix arrays (explained later)
+```{r}
+library(c(affy, affyPLM, simpleaffy))
+```
+
+Load other Biocondouctor packages
+```{r}
+#library(limma)
+#library(Biostrings)
+#library(genefilter)
+```
+
+Load the annotation package for the species whose array you used in your experiment.
+```{r}
+#library("drosophila2.db")
+```
+
+***
+
+# Import data into R
+
+### Importing CEL files into R
+
+In 3' IVT arrays, the probe set matches the 600bp region adjacent to the 3' end of a transcript. This is because 3' IVT assays use oligo-dT primers during the cDNA step. This causes preferntial amplification of the 3' region adjacent to poly(A) tail of the mRNA. 3' IVT assays are most commonly used for whole-genome transcriptome experiments. In the newer, exon arrays, the probe sets match exons distributed throughout a transcript [see @Dalma-Weiszhausz2006, Fig. 4].
+
+To open CEL files of 3' IVT Arrays use the affy package:
+Use ReadAffy() to read all CEL files in the folder and load them into an AffyBatch object in R. Use the argument celfile.path to specify the location of the folder that contains the CEL files; the `.` symbol specifies that the path to the folder `CEL Files` ends in the current project directory. 
+
+```{r, tidy = TRUE}
+#if (!requireNamespace("BiocManager", quietly = TRUE)) #quietly checks if Bioconductor is already installed
+#    install.packages("BiocManager") # installs Bioconductor if not in Namespace
+#BiocManager::install("affy") #installs `affy` using Bioconductor
+
+library(affy)
+
+raw_data <- ReadAffy(celfile.path = "./CEL Files")
+```
+Thus, you obtain an AffyBatch object`raw_data` containing the data from all your CEL files. 
+
+### Importing sample information
+
+The `samples_data.csv` file in the project directory contains descritptive features for each sample. Specify what kind of data each of its column contains. 
+
+```{r, tidy = TRUE}
+sample_data <- read_csv("sample_data.csv", 
+                        col_types = cols(age = col_integer(), 
+                                         day = col_factor(levels = c("1", "2", "3", "4", "5", "6")), 
+                                         generation = col_factor(levels = c("F-1", "F0 + F1", "F2", "F3")), 
+                                         module = col_factor(levels = c("1", "2", "3", "4")),
+                                         number = col_integer(), 
+                                         replicate = col_factor(levels = c("L3", "L4", "L5", "L7", "L8", "L9", "L10")), 
+                                         sex = col_factor(levels = c("female", "male")),
+                                         stored = col_date(format = "%m/%d/%Y"),
+                                         wash = col_factor(levels = c("1", "2", "3", "4")),
+                                         genotype = col_factor(levels = c("test", "control", "w1118", "rpr/cyo; dilp3/ser", 
+                                                                          "cyo/+; ser/+", "rpr/+; dilp3/+", "cyo/+; dilp3/+", 
+                                                                          "rpr/+; ser/+"))))
+```
+
+
+### Cleaning the object names
+
+A few of the CEL files have incorrect names. This happened because:
+1. The registartion process for four of the chips on the AGCC portal did not complete. Therefore, the files for these four chips were named with their serial number (the number stating with the symbol @).
+2. Two chips were registered under the same name by mistake. The file named 2y (created on June 17) is for chip 4y, while the file named real_2y (created on June 24) is the real 2y.
+3. The name of one of the files was not suffixed correctly: it was named 12.1 instead of n12.1
+4. Finally, the names of the reminaing files were capitalized inconsistenetly.
+
+While importing the .CEL files, the ReadAffy() function uses their full names (including the string '_(Drosophila_2).CEL') as colnames of the `exprs` object and rownames of the `pData` object. It creates these objects as sub-parts of the larger AffyBatch object. The names of both of the sub-part objects can also be accessed by `sampleNames()`. Check that they are identical to elements of `sample_data$file_name`
+
+```{r}
+#check
+sampleNames(raw_data) == sample_data$file_name
+#or
+(sampleNames(raw_data) == sample_data$file_name) %>% sum()
+```
+
+```{r}
+#Optional: you will also observe that
+#colnames(exprs(raw_data)) == rownames(phenoData(raw_data))
+#colnames(exprs(raw_data)) == sampleNames(raw_data)
+#rownames(phenoData(raw_data)) == sampleNames(raw_data)
+```
+
+After checking that the initial file names will be retained in full within `sample_data$file_name`, we can replace names of the `exprs` and `pData` objects with the `label` column of `sample_data`. It contains the corrected and cleaned up (without the string '_(Drosophila_2).CEL') sample names.
+
+```{r}
+sampleNames(raw_data) <- sample_data$label
+```
+
+Once the names of the AffyBatch sub-part objects have been fixed we will populate the pData object (accessed  using `pData()` but set using `phenoData()`) with the sample information. First, the elements of the `label` coulmn have to be converted to rownames of `sample_data`. A data frame requires row names before it can be used as an input for `phenoData()`, otherwise `phenoData()` will assign row names by defualt as 1, 2, 3... .
+
+```{r}
+sample_data <- sample_data %>% column_to_rownames(var = "label")
+phenoData(raw_data) <- AnnotatedDataFrame(sample_data)
+```
+
+
+Finally, we perform multiple checks to ensure that the names were assigned in the proper sequence.
+```{r}
+#check 1
+colnames(exprs(raw_data)) == rownames(pData(raw_data))
+#or
+colnames(exprs(raw_data)) == sampleNames(raw_data)
+#or
+rownames(pData(raw_data)) == sampleNames(raw_data)
+
+#check 2
+rownames(exprs(raw_data)) %>% head() == rownames(fData(raw_data)) %>% head()
+
+#check 3 (preferred)
+validObject(raw_data)
+```
+
+
+Replace files fom 24th; rerun
+***
+
+# Quality Control
+Boxplots
+Histograms
+MA plots
+7.3.1 Calculate quality measures in affy
+```{r}
+qc(raw_data)
+```
+
+# Acknowledgements
+
+
+This content was developed by heavily modifying content from [VIB Bioinformatics Core Wiki](https://wiki.bits.vib.be/index.php/Analyze_your_own_microarray_data_in_R/Bioconductor). The original content was made available under the Creative Commons Attribution-ShareAlike 3.0 Unported License.
+
+***
+
+# References
+
+
