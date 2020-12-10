@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+we add “feature data”, i.e. annotation information to the probes stored in the featureData of our ExpressionSet. We used the function `select` from the package `AnnotationDbi` to query the gene symbols and associated short descriptions for all the probes. `AnnotationDbi` provides a user interface for annotation data packages built using SQLite. For each probe, we added the gene symbol (SYMBOL) and a short description of the gene the probe represents (GENENAME).
+
+In a second step, we filtered out the probes that do not map to a gene, i.e. that do not have a gene symbol assigned. This step also removes the quality control probes.
+
+```{r}
+#annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
+fData(eset_mini) <- AnnotationDbi::select(drosophila2.db,
+                                       keys = (featureNames(eset)), #indexes the rows
+                                       columns = c("SYMBOL", "GENENAME"), #indexes the columns
+                                       keytype = "PROBEID") #arranges the output by this column
+
+#ExpressionSet objects cannot be subset with filter() or subset()
+HasSymbol <- !is.na(fData(eset)$Symbol) #this also removes quality control probes
+eset <- eset[HasSymbol, ] 
+
+
+
+# check that all quality control probes, containing the pattern AFFX in their name, were removed
+# str_detect(anno_eset$PROBEID, "AFFX") %>% sum()
+
+anno_grouped <- group_by(anno_eset, PROBEID)
+anno_summarized <- dplyr::summarize(anno_grouped, no_of_matches = n_distinct(SYMBOL))
+anno_filtered <- filter(anno_summarized, no_of_matches > 1)
+nrow(anno_filtered)
+
+filter(anno_eset, PROBEID == anno_filtered$PROBEID[i])
+```
+
+### should
+1. Find out why different models give different results
+> The problem arises because one of the methods for dealing with between-replicate variance breaks one of the models.  Between-replicate variance can be accounted for by either including the surrogate replicate varibale `day` in the model formula as a fixed factor, or by treating the variable `replicate` as a random effect. The former method makes the coefficients of the model `design_2` inestimable, hence only the latter method remains serviceable. In addtion, the random effect method [increases power in case an unequal number of replicates are present for the different experimental conditions](https://support.bioconductor.org/p/57840/).
+As explained [here](https://newonlinecourses.science.psu.edu/stat555/node/48/), an assumption of the random effect method is that "all the genes are independent (which is not quite true) with the same true intrablock correlation." The true (i.e. population) intrablock correlation is estimated from the data using the function `duplicatecorrelation`; once it and the within block variance are known, the total variance can also be calculated, since the intrablock correlation is the ratio of intrablock variance to total variance  $\rho = \frac{\sigma^2_{within}}{\sigma^2_{total}}$. The intrablock correlation is also calle intraclass correlation (refer ['Intraclass Correlation and Shrinkage'](https://newonlinecourses.science.psu.edu/stat555/node/74/)).
+
+### could
+1. select the correct method for multiple testing adjustment between contrasts
+> (refer section 13.3; refer examples on pages 97, 107, 113; refer [user manual](https://bioconductor.org/packages/release/bioc/manuals/limma/man/limma.pdf#Rfn.decideTests.1)
+
+2. remove same probe mapped to multiple genes
+3. remove multiple probes mapped to same gene [filter based on fit_model_1$sigma or use avereps]
+ 
+### would
+1. Find GO terms
+>
+* Read about the function 'topTable()' in section 13.1 of the user guide and about its arguments 'adjust', 'sort' and 'lfc' in the manual https://bioconductor.org/packages/release/bioc/manuals/limma/man/limma.pdf#Rfn.toptable.1
+* Some studies require more than an adjusted p-value cut-off. For a stricter definition on significance, one may require log-fold-changes (log-FCs) to be above a minimum value. A log-FC of 1 is equla to a two-fold difference on the original scale. https://bioconductor.github.io/BiocWorkshops/rna-seq-analysis-is-easy-as-1-2-3-with-limma-glimma-and-edger.html#differential-expression-analysis
+
+2. Make heat maps
+> Heatmaps allow users to look at the expression of a subset of genes. This can be give useful insight into the expression of individual groups and samples without losing perspective of the overall study when focusing on individual genes, or losing resolution when examining patterns averaged over thousands of genes at the same time.
+https://bioconductor.github.io/BiocWorkshops/rna-seq-analysis-is-easy-as-1-2-3-with-limma-glimma-and-edger.html#useful-graphical-representations-of-differential-expression-results
+
+### To do
+1. Combine experimental factors; use duplicate correlation [done]
+
+2. Compare with case studies in BOTH guides to emulate the contrasts
+* shortlisted sections: 17.3
+* possible contrats: a group versus both other groups both, or either, or at least one
+
+3. check contrats work as expected by using marginal means of fold change values of significant genes 
+* https://www.theanalysisfactor.com/using-marginal-means-to-explain-an-interaction/
+* for model ~A, A1 becomes the intercept and that for model ~A+B, A1 and B1 (both) become the intercept
+* The mean of the group A1/B1 is predicted by the intercept; the mean of the group A2/B1 is predicted by the intercept plus the A2 effect; the mean of the group A2/B4 is predicted by the intercept plus the A2 effect + the A2:B4 effect. You can check this by using predict and comparing the result with manual calculations. https://stats.stackexchange.com/questions/231111/how-does-r-decide-which-parameters-are-inside-the-intercept-for-dummy-coding?rq=1
+* For a given experiment, there are usually several equivalent ways to set up an appropriate design matrix. For example, ~0+group+lane removes the intercept from the first factor, group, but an intercept remains in the second factor lane. Alternatively, ~group+lane could be used to keep the intercepts in both group and lane. https://bioconductor.github.io/BiocWorkshops/rna-seq-analysis-is-easy-as-1-2-3-with-limma-glimma-and-edger.html#differential-expression-analysis
+
+4. Compare a simple model with just the main effect of generation with a complex model including both the main effect and the interaction to see if the interaction is driven completely by the main effect.
+
+5. Perform Tukey pairwise comparison **between** the three contrasts of the interaction to discover which one is significant
+6. Similarly perform Tukey pairwise comparison **within** the three contrasts of the main effcet of gneration to discover which one is significant
+
+7. check p-value histgrams of the main effects
+> the uncorrected p-value hisograms of the main effect of genotype are skewed left in all the models. The three models give identical top tables though the signs in model_1 are reversed as compared to model_3 and model_7: edit the signs of model_1 contrasts in `Rough Work.xlsx` and the R code.
+
+
+```{r comparisons}
+#####
+# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
+# to dheck the overlap between models look at the intersection of their respective topTable() outputs
+
+intersect(rownames(top_1[top_1$adj.P.Val <= 0.05, ]), rownames(top_7[top_1$adj.P.Val <= 0.05, ]))
+
+#####
+# when coef() is used to combine two or more contrasts, then only topTable() output is useful
+m1_gener_2v1_down <- top_1_gener %>%
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_2v1 < 0) %>% 
+  select(rowname)
+
+m1_gener_2v1_up <- top_1_gener %>% 
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_2v1 > 0) %>% 
+  select(rowname)
+
+m1_gener_3v1_down <- top_1_gener %>%
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_3v1 < 0) %>% 
+  select(rowname)
+
+m1_gener_3v1_up <- top_1_gener %>% 
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_3v1 > 0) %>%
+  select(rowname)
+
+m1_gener_3v2_down <- top_1_gener %>% 
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_3v2 < 0) %>%
+  select(rowname)
+
+m1_gener_3v2_up <- top_1_gener %>% 
+  rownames_to_column() %>%
+  filter(adj.P.Val <= 0.05 & gen_3v2 > 0) %>% 
+  select(rowname)
+```
+
