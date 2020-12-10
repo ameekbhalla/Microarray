@@ -1,0 +1,214 @@
+country,cases,deaths,cases/million,deaths/million,leader_name,designation,sex
+United States,612380,25949,1428,51,,,Men
+Spain,174060,18255,3334,339,,,Men
+Italy,162488,21067,2384,303,,,Men
+Germany,132210,3495,1432,31,Angela Merkel,Head of government,Women
+France,103573,15729,1287,182,,,Men
+United Kingdom,93873,12107,980,120,,,Men
+China,82295,3342,58,2,,,Men
+Iran,74877,4683,818,51,,,Men
+Turkey,65111,1403,508,11,,,Men
+Belgium,31119,4157,2314,262,Sophie Wilmès,Head of government,Women
+Netherlands,27419,2945,1323,144,,,Men
+Canada,27063,903,546,13,,,Men
+Switzerland,25936,1174,2811,111,,,Men
+Brazil,25262,1532,86,5,,,Men
+Russia,21102,170,81,1,,,Men
+Portugal,17448,567,1506,42,,,Men
+Austria,14234,384,1511,36,,,Men
+Israel,12046,123,1099,10,,,Men
+Ireland,11479,406,1336,53,,,Men
+Sweden,11445,1033,937,84,,,Men
+India,10815,353,5,0,,,Men
+South Korea,10591,225,202,4,,,Men
+Peru,10303,230,164,4,,,Men
+Chile,7917,92,313,3,,,Men
+Japan,7645,109,42,1,,,Men
+Ecuador,7603,355,284,16,,,Men
+Poland,7202,263,150,5,,,Men
+Romania,6879,346,282,13,,,Men
+Norway,6686,139,1165,21,Erna Solberg,Head of government,Women
+Denmark,6511,299,999,42,Mette Frederiksen,Head of government,Women
+Australia,6400,61,242,2,,,Men
+Czech Republic,6111,161,523,11,,,Men
+Pakistan,5837,96,21,0,,,Men
+Saudi Arabia,5369,73,107,1,,,Men
+Philippines,5223,335,39,2,,,Men
+Mexico,5014,332,27,2,,,Men
+Malaysia,4987,82,133,2,,,Men
+United Arab Emirates,4933,28,302,1,,,Men
+Indonesia,4839,459,13,1,,,Men
+Serbia,4465,94,446,10,Ana Brnabi?,Head of government,Women
+Panama,3574,95,652,16,,,Men
+Qatar,3428,7,914,2,,,Men
+Ukraine,3372,98,53,2,,,Men
+Luxembourg,3307,69,4975,83,,,Men
+Dominican Republic,3286,183,227,11,,,Men
+Belarus,3281,33,211,2,,,Men
+Singapore,3252,10,370,1,Halimah Yacob,Head of state,Women
+Finland,3161,59,501,9,Sanna Marin,Head of government,Women
+Colombia,2979,127,45,1,,,Men
+Thailand,2613,41,37,0,,,Men
+South Africa,2415,27,34,0,,,Men
+Egypt,2350,178,17,1,,,Men
+Argentina,2277,101,42,2,,,Men
+Greece,2170,101,188,8,Katerina Sakellaropoulou,Head of state,Women
+Algeria,2070,326,39,5,,,Men
+Moldova,1934,38,536,11,,,Men
+Morocco,1888,126,40,3,,,Men
+Iceland,1720,8,4598,16,Katrín Jakobsdóttir,Head of government,Women
+Croatia,1704,31,367,5,,,Men
+Bahrain,1528,7,592,3,,,Men
+Hungary,1512,122,122,8,,,Men
+Iraq,1400,78,31,2,,,Men
+Estonia,1373,31,947,18,Kersti Kaljulaid,Head of state,Women
+Kuwait,1355,2,225,0,,,Men
+Kazakhstan,1232,14,43,0,,,Men
+Slovenia,1220,56,554,21,,,Men
+Azerbaijan,1197,13,92,1,,,Men
+Uzbekistan,1165,4,18,0,,,Men
+New Zealand,1078,9,204,0,Jacinda Ardern,Head of government,Women
+Bosnia and Herzegovina,1077,41,268,11,,,Men
+Lithuania,1070,24,358,6,,,Men
+Armenia,1067,16,317,4,,,Men
+Hong Kong,1013,4,132,1,,,Men
+Bangladesh,1012,46,3,0,Sheikh Hasina,Head of government,Women
+Puerto Rico,923,45,227,12,,,Men
+North Macedonia,908,44,342,15,,,Men
+Cameroon,848,14,30,0,,,Men
+Slovakia,835,2,128,0,Zuzana ?aputová,Head of state,Women
+Oman,813,4,104,1,,,Men
+Cuba,766,21,46,1,,,Men
+Tunisia,747,34,55,2,,,Men
+Afghanistan,714,23,16,0,,,Men
+Bulgaria,713,35,89,3,,,Men
+Cyprus,685,12,632,11,,,Men
+Andorra,659,31,7518,322,,,Men
+Latvia,657,5,321,1,,,Men
+Lebanon,641,21,89,3,,,Men
+Ivory Coast,638,6,17,0,,,Men
+Ghana,636,8,12,0,,,Men
+Costa Rica,618,3,107,1,,,Men
+Niger,570,14,18,0,,,Men
+Burkina Faso,528,30,21,1,,,Men
+Uruguay,492,8,130,2,,,Men
+Albania,475,24,146,8,,,Men
+Kyrgyzstan,430,5,46,1,,,Men
+Honduras,407,26,42,3,,,Men
+Jordan,397,7,35,1,,,Men
+Malta,393,3,709,4,,,Men
+Taiwan,393,6,16,0,Tsai Ing-wen,Head of state and government,Women
+Kosovo,387,8,126,4,,,Men
+Nigeria,373,11,1,0,,,Men
+San Marino,372,36,10246,1013,,,Men
+Djibouti,263,2,139,1,,,Men
+Guinea,363,0,16,0,,,Men
+Bolivia,354,28,23,2,Jeanine Áñez,Head of state and government,Women
+Mauritius,324,9,248,7,,,Men
+Georgia,300,3,62,1,Salome Zurabishvili,Head of state,Women
+Senegal,299,2,16,0,,,Men
+Palestine,288,2,53,0,,,Men
+Montenegro,283,2,405,3,,,Men
+Vietnam,266,0,3,0,,,Men
+Isle of Man,254,2,2281,12,,,Men
+DR Congo,241,20,2,0,,,Men
+Sri Lanka,233,7,9,0,,,Men
+Guernsey,223,7,3042,80,,,Men
+Jersey,217,6,1713,28,,,Men
+Kenya,216,9,4,0,,,Men
+Venezuela,193,9,171,9,,,Men
+Faroe Islands,184,0,3530,0,,,Men
+Guatemala,167,5,8,0,,,Men
+Paraguay,159,7,17,1,,,Men
+El Salvador,149,6,18,1,,,Men
+Mali,144,13,4,0,,,Men
+Brunei,136,1,305,2,,,Men
+Rwanda,134,0,9,0,,,Men
+Guam,133,5,742,23,,,Men
+Gibraltar,129,0,3650,0,,,Men
+Cambodia,122,0,8,0,,,Men
+Trinidad and Tobago,113,8,80,6,Paula-Mae Weekes,Head of state,Women
+Madagascar,106,0,4,0,,,Men
+Jamaica,105,4,23,1,,,Men
+Northern Cyprus,99,3,270,9,,,Men
+Monaco,93,1,2193,26,,,Men
+Aruba,92,0,730,0,,,Men
+Ethiopia,82,3,1,0,Sahle-Work Zewde,Head of state,Women
+Liechtenstein,79,1,2039,0,,,Men
+Togo,77,3,10,0,,,Men
+Congo,74,5,8,1,,,Men
+Barbados,73,5,230,10,Mia Mottley,Head of government,Women
+Myanmar,63,4,0,0,Aung San Suu Kyi,de facto Head of government,Women
+Somalia,60,2,1,0,,,Men
+Bermuda,57,5,750,62,,,Men
+Gabon,57,1,20,0,,,Men
+French Polynesia,55,0,185,0,,,Men
+Uganda,55,0,1,0,,,Men
+Cayman Islands,54,1,684,15,,,Men
+Tanzania,53,3,1,0,,,Men
+Sint Maarten,52,8,1231,197,,,Men
+U.S. Virgin Islands,51,1,478,10,,,Men
+Liberia,50,5,8,1,,,Men
+Bahamas,49,8,106,21,,,Men
+Guyana,47,6,40,6,,,Men
+Macau,45,0,66,0,,,Men
+Zambia,45,2,2,0,,,Men
+Equatorial Guinea,41,0,13,0,,,Men
+Haiti,40,3,3,0,,,Men
+Guinea-Bissau,39,0,22,0,,,Men
+Benin,35,1,3,0,,,Men
+Eritrea,35,0,9,0,,,Men
+Libya,35,1,3,0,,,Men
+Saint Martin,33,3,895,56,,,Men
+Sudan,32,5,0,0,,,Men
+Mongolia,30,0,5,0,,,Men
+Syria,29,2,1,0,,,Men
+Mozambique,28,0,1,0,,,Men
+Antigua and Barbuda,23,2,197,10,,,Men
+Chad,23,0,1,0,,,Men
+Maldives,20,0,51,0,,,Men
+Angola,19,2,1,0,,,Men
+Laos,19,0,2,0,,,Men
+Zimbabwe,18,3,1,0,,,Men
+Belize,18,2,20,2,,,Men
+New Caledonia,18,0,64,0,,,Men
+Dominica,16,0,209,0,,,Men
+Fiji,16,0,18,0,,,Men
+Malawi,16,2,0,0,,,Men
+Namibia,16,0,7,0,Saara Kuugongelwa,*,Women
+Nepal,16,0,0,0,Bidhya Devi Bhandari,Head of state,Women
+Eswatini,15,0,11,0,,,Men
+Saint Lucia,15,0,78,0,,,Men
+Curaçao,14,1,88,6,,,Men
+Grenada,14,0,107,0,,,Men
+Saint Kitts and Nevis,14,0,208,0,,,Men
+Botswana,13,1,6,0,,,Men
+St. Vincent and the Grenadines,12,0,108,0,,,Men
+Cape Verde,11,1,13,2,,,Men
+Central African Republic,11,0,1,0,,,Men
+Falkland Islands,11,0,1563,0,,,Men
+Greenland,11,0,196,0,,,Men
+Nicaragua,11,1,1,0,,,Men
+Northern Mariana Islands,11,2,196,36,,,Men
+Montserrat,11,0,1604,0,,,Men
+Seychelles,11,0,113,0,,,Men
+Sierra Leone,11,0,1,0,,,Men
+Åland Islands,10,0,301,0,,,Men
+Suriname,10,1,17,2,,,Men
+Turks and Caicos Islands,10,1,193,24,,,Men
+Gambia,9,1,2,0,,,Men
+Vatican City,8,0,10013,0,,,Men
+Mauritania,7,1,2,0,,,Men
+Saint Barthélemy,6,0,613,0,,,Men
+East Timor,6,0,1,0,,,Men
+Artsakh,5,0,7,0,,,Men
+Burundi,5,1,0,0,,,Men
+Bhutan,5,0,7,0,,,Men
+São Tomé and Príncipe,4,0,20,0,,,Men
+South Sudan,4,0,0,0,,,Men
+Anguilla,3,0,202,0,,,Men
+British Virgin Islands,3,0,100,0,,,Men
+Papua New Guinea,2,0,0,0,,,Men
+Abkhazia,1,0,4,0,,,Men
+Saint Pierre and Miquelon,1,0,166,0,,,Men
+Yemen,1,0,0,0,,,Men

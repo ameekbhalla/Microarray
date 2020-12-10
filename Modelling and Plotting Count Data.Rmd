@@ -1,0 +1,64 @@
+---
+title: "Modelling and Plotting Count Data"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library("OnRampsR")
+library("tidyverse")
+library("broom")
+library("readxl")
+library("lubridate")
+library("knitr")
+library("XLConnect")
+```
+
+This project tests if the sex of a head of state/government had an effect on its Covid-19 outcomes.
+Background: A female [twitter user respnded](https://twitter.com/eawilloughby/status/1249852024067416064) to a [Forbes article that went viral while claiming that countries with woemn leaders had better Covid-19 outcomes](https://www.forbes.com/sites/avivahwittenbergcox/2020/04/13/what-do-countries-with-the-best-coronavirus-reponses-have-in-common-women-leaders/).
+I was concerned that the conclusion of "no effect" might be hasty because the twitter user made two mistakes:
+1. She applied the incorrect statistical test (count data should be tested with a Poisson distribution not a t-test) 
+2. She also drastically truncated the data (see the discrepancy between her t-tests' degrees of freedom, t(df), and the N's)
+
+Therefore, I tested the full dateset (N = 213) with a model specific to count data (models for non-normal data are called a generalized linear models).
+
+Lastly, simple numbers of cases & deaths are incomparable between countries because the onset of the pandemic happened on different dates. (The twitter user above should have simply compared case fatality rates.) To compare cases and deaths across countries don't compare curves of per capita rates, but curves of per capita rates starting at the same reference point [(example, the day since each country had 1death/million people)](https://twitter.com/jonfwilkins/status/1249511124749422593).
+
+
+
+```{r warning = FALSE}
+clean <- read_csv("Modelling and Plotting Count Data.csv")
+
+names(clean) <- c("country", "cases", "deaths", "cases/million", "deaths/million", "leader_name",
+                  "designation", "sex")
+
+# glm of cfr (ie deaths/cases) predicted by sex; applying poisson log transforms the outcome variable
+
+# 1. testing if the two levels differ from each other
+full_0 <- glm((deaths/cases) ~ sex, family = poisson(link = log), data = clean) %>% 
+car::Anova(type = 3) %>% tidy() ##chi-squared test for difference between two levels of the factor sex
+
+# 2. testing if the two levels differ from zero (for calculation of CIs)
+full <- glm((deaths/cases) ~ 0 + sex, family = poisson(link = log), data = clean) %>% tidy(conf.int = T)
+
+# renaming the contents of the first coln of the tidy output to make plotting easier
+full$term <- full$term %>% as.factor() # first encode the two rows of the first coln as factor levels
+levels(full$term) <- c("Men", "Women") #change their names from "sexMen" & "sexWomen" to "Men" & "Women"
+
+#plotting
+ggplot(full, aes(term, estimate)) +  theme_classic() + 
+  geom_linerange(aes(ymin = conf.low, ymax = conf.high), #makes gray boxes equal to length of CI
+                     size = 22, alpha = 0.1) + #determines width and fading of boxes
+  geom_boxplot(aes(y = estimate), width = 0.07) + #marks line at average values within boxes
+  geom_point(data = clean, aes(x = sex, y = log(deaths/cases)), #overlays data points
+                         position = position_jitter(0.05), alpha = 0.4) + #jitters and fades data points
+    theme(plot.title = element_text(vjust = - 10, hjust = 0.5), # shifts title 
+          plot.subtitle = element_text(vjust = - 11, hjust = 0.5))  +  # shifts subtitle 
+  labs(title="Generalized linear model of CFR vs Leader's sex", #title
+         subtitle = "(Chi-sq for sex diff = 0.008, p-value = 0.930)", #subtitle
+         x="Leader's sex", # x-axis title
+         y = "log(Case fatality rate)") + #y-axis title
+  scale_y_continuous(limits =  c(-7, -1)) #increases the scale of the y-axis
+
+```
