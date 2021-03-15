@@ -675,12 +675,12 @@ fit_model_1 <- lmFit(eset_mini, design_1,
 # average(f1.test + f2.test + f3.test) - average (f1.control + f.2 control + f3.control)
 # average[(f1.test - f1.control); (f2.test - f.2 control); (f3.test - f3.control)]
 
-cm_1_genotype <- makeContrasts(
-  t_v_c = (F1.test.female + F2.test.female + F3.test.female)/3 - 
-          (F1.control.female + F2.control.female + F3.control.female)/3,
-  levels = design_1)
-
-cm_1_genotype 
+# cm_1_genotype <- makeContrasts(
+#   t_v_c = (F1.test.female + F2.test.female + F3.test.female)/3 - 
+#           (F1.control.female + F2.control.female + F3.control.female)/3,
+#   levels = design_1)
+# 
+# cm_1_genotype 
 
 ## use the following contrast if predictor in the design matrix is genotype instead of group
 # cm_1_genotype <- makeContrasts(
@@ -693,13 +693,13 @@ cm_1_genotype
 # it tests if the difference(s) in heights of genotype line segments at any generation level are !0
 # it estimates the simple effect of genotype at each level of generation
 
-# cm_1_genotype_simple <- makeContrasts(
-#   gen_1_geno = (F1.test.female - F1.control.female),
-#   gen_2_geno = (F2.test.female - F2.control.female),
-#   gen_3_geno = (F3.test.female - F3.control.female),
-#   levels = design_1)
-#
-# cm_1_genotype_simple
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test.female - F1.control.female),
+  gen_2_geno = (F2.test.female - F2.control.female),
+  gen_3_geno = (F3.test.female - F3.control.female),
+  levels = design_1)
+
+cm_1_genotype_simple
 
 #filter out probes with an average expression level below 3
 keep <- fit_model_1$Amean > 3 #`Amean` stores the average log expression values
@@ -707,7 +707,7 @@ fit2_model_1 <- fit_model_1[keep, ]
 nrow(fit2_model_1)
 
 #fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype)
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
 
 #set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
 fit2_model_1 <- eBayes(fit2_model_1, 
@@ -720,24 +720,35 @@ results_1_geno <- decideTests(fit2_model_1)
 summary(results_1_geno)
 
 # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-# vennDiagram(results_1_geno)
+vennDiagram(results_1_geno)
 
 #A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
 # topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-top_1_geno <- topTable(fit2_model_1,
-                  # coef=c(1:2),
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-hist(top_1_geno$P.Value)
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-qplot(top_1_geno$P.Value,
-      geom="histogram",
-# specify the size of the class interval
-      binwidth = 0.05,
-# specify if bin boundaries fall at centre or ends of class intervals
-      boundary = 0.05) + ylim(0, 800) + 
-  ggtitle("p-value histogram of group-means interaction model") +
-  theme_classic()
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+
+hist(top_1_geno_1$P.Value)
+hist(top_1_geno_2$P.Value)
+hist(top_1_geno_3$P.Value)
+
+# qplot(top_1_geno$P.Value,
+#       geom="histogram",
+# # specify the size of the class interval
+#       binwidth = 0.05,
+# # specify if bin boundaries fall at centre or ends of class intervals
+#       boundary = 0.05) + ylim(0, 800) + 
+#   ggtitle("p-value histogram of group-means interaction model") +
+#   theme_classic()
 
 # ggplot(data = top_1, aes(x = top_1$P.Value)) +
 #   geom_histogram() +
@@ -1276,9 +1287,20 @@ library(fdrtool)
 
 ## group-means interaction model
 
-fdr_1 <- (top_1$t - median(top_1$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
 
-qplot(fdr_1$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+
+qplot(fdr_1_1$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+
+qplot(fdr_1_2$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+
+qplot(fdr_1_3$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
   theme_classic() +
   xlab("corrected p-values") + ylim(0, 1250) 
 
