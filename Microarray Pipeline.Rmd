@@ -1251,28 +1251,6 @@ qplot(top_4_inter$P.Value,
   theme_classic()
 ```
 
-```{r}
-
-# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
-# to check the overlap between models look at the intersection of their respective topTable() outputs
-
-# when coef() is used to combine two or more contrasts, then only topTable() output is useful
-
-intersect(rownames(top_1_gener[top_1_gener$adj.P.Val <= 0.05, ]), rownames(top_4_gener[top_4_gener$adj.P.Val <= 0.05, ])) %>% length()
-
-rownames(top_1_gener[top_1_gener$adj.P.Val <= 0.05, ]) %>% length()
-
-rownames(top_4_gener[top_4_gener$adj.P.Val <= 0.05, ]) %>% length()
-
-
-intersect(rownames(top_1_inter[top_1_inter$adj.P.Val <= 0.05, ]), rownames(top_4_inter[top_4_inter$adj.P.Val <= 0.05, ]))  %>% length()
-
-rownames(top_1_inter[top_1_inter$adj.P.Val <= 0.05, ]) %>% length()
-
-rownames(top_4_inter[top_4_inter$adj.P.Val <= 0.05, ]) %>% length()
-```
-
-
 ## Empirical null distributions
 The function `frdtool()` accepts a vector of z-scores, correlations, p-values, or t-scores as input and estimates the parameters of the corresponding null distribution empirically from the data (except in the case of p-values, where it's unnecessary). 
 The kind of null distirbution to be estimated is specified by the argument `statistic`. 
@@ -1382,22 +1360,21 @@ hist(top_1$P.Value, breaks = 100, xlim = c(0,1),
 ```
 
 ```{r venn_overlap}
-venn_overlap <- results_1@.Data %>% subset(results_1@.Data[ , "gen_2v1"] != 0 & 
-                     results_1@.Data[ , "gen_3v1"] != 0) %>% 
-                      rownames()
 
-sig_F <- top_1 %>% subset(adj.P.Val <= 0.05) %>% rownames()
+# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
+# to check the overlap between models look at the intersection of their respective topTable() outputs
 
-venn_overlap 
-sig_F 
+# when coef() is used to combine two or more contrasts, then only topTable() output is useful
 
-#boxplot of all the groups pf gene i in the list sig_F
-boxplot(exprs(eset_mini)[sig_F[i], ] ~ pData(eset_mini)[ , "group"])
+geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
+geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
+geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
 
-ggplot(data = pData(eset_mini), aes(x = generation, exprs(eset_mini)[sig_F[29], ], fill=genotype)) +
-  # geom_point(aes(col = genotype), position = position_jitter(0.1), shape = 1, size = 5) +
-  geom_dotplot(position = position_jitter(0.1), binaxis = "y", stackdir = "center", alpha = 0.7) +
-  theme_classic()
+geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
+geno_2v3 <- inner_join(subset(geno_2, geno_2$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+
+geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
 ```
 
 #
