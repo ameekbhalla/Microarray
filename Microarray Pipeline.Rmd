@@ -1287,9 +1287,9 @@ library(fdrtool)
 
 ## group-means interaction model
 
-fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
-fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
-fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic= "normal", plot = F)
 
 
 qplot(fdr_1_1$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
