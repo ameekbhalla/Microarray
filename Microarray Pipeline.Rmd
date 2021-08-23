@@ -1457,10 +1457,13 @@ top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
 
 Conclusion:
 1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation --- use latter 2 only
-2.   Corrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore
-3. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore 
-4. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- more 1st DE genes than in #1    --- *use for displaying expression levels and building volcano plots*
-5. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- most 1st DE genes than in #1/#4 --- *use with #1 to give to Abhay and for geo* 
+2.   Corrected, w/o FC threshold, w/o  p value adj ---    DE genes found in 2nd & 3rd generation --- 
+3.   Corrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore
+4.   Corrected, w/  FC threshold, w/o  p value adj --- no DE genes found in 2nd & 3rd generation --- not done
+5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore 
+6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- more 1st DE genes than in #1    --- *use for displaying expression levels and building volcano plots*
+7. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- most 1st DE genes than in #1/#4 --- *use with #1 to give to Abhay and for geo* 
+8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- not done
 
 To do:
 [] - Repeat with other sex
