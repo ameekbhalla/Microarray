@@ -37,18 +37,15 @@ bibliography: Microarray references.bib
 
 # Setup
 
-## Set default chunk options
 
 The default chunk options can be set in the first chunk itself. Later, the behaviour of individuals chunks can be modified by modifying a specific argument.
 
-```{r}
+```{r setup results = "hide"}
+## Set default chunk options
+
 knitr::opts_chunk$set(results = "hide", 
                       tidy = TRUE)
-```
-
 ## Load Packages
-
-```{r results = "hide"}
 library(affy) # Bioconductor package for analysis of older Affymetrix arrays
 #library(affyio)
 #library(affyPLM)
