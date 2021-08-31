@@ -1262,39 +1262,42 @@ library(fdrtool)
 
 ## group-means interaction model
 
-fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic= "normal", plot = F)
-fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic= "normal", plot = F)
-fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic= "normal", plot = F)
+fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic = "normal", plot = F)
+fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic = "normal", plot = F)
+fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic = "normal", plot = F)
 
+geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
+geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
+geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
 
-qplot(fdr_1_1$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+qplot(fdr_1_1$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
   theme_classic() +
   xlab("corrected p-values") + ylim(0, 1250) 
 
-qplot(fdr_1_2$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+qplot(fdr_1_2$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
   theme_classic() +
   xlab("corrected p-values") + ylim(0, 1250) 
 
-qplot(fdr_1_3$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
   theme_classic() +
   xlab("corrected p-values") + ylim(0, 1250) 
+#####
+# ## nested interaction model
+# 
+# fdr_2 <- (top_2$t - median(top_2$t)) %>% fdrtool(statistic = "normal", plot = F)
+# 
+# qplot(fdr_2$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of nested interaction model, corrected (via t-stats)") +
+#   theme_classic() +
+#   xlab("corrected p-values") + ylim(0, 1250) 
+# 
+# ## classic interaction model
+# fdr_3 <- (top_3$t - median(top_3$t)) %>% fdrtool(statistic = "normal", plot = F)
+# 
+# qplot(fdr_3$pval, geom ="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of classic interaction model, corrected (via t-stats)") +
+#   theme_classic() +
+#   xlab("corrected p-values") + ylim(0, 1250) 
 
-## nested interaction model
-
-fdr_2 <- (top_2$t - median(top_2$t)) %>% fdrtool(statistic= "normal", plot = F)
-
-qplot(fdr_2$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of nested interaction model, corrected (via t-stats)") +
-  theme_classic() +
-  xlab("corrected p-values") + ylim(0, 1250) 
-
-## classic interaction model
-fdr_3 <- (top_3$t - median(top_3$t)) %>% fdrtool(statistic= "normal", plot = F)
-
-qplot(fdr_3$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of classic interaction model, corrected (via t-stats)") +
-  theme_classic() +
-  xlab("corrected p-values") + ylim(0, 1250) 
-
-
+#####
 # # using p-values as input
 # 
 # ## group-means interaction model
@@ -1314,6 +1317,230 @@ qplot(fdr_3$pval, geom="histogram", binwidth = 0.05, boundary = 0.05, color = I(
 #   xlab("corrected p-values")
 
 ```
+
+2.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/o_adj_w/o_FC}
+
+# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
+# to check the overlap between models look at the intersection of their respective topTable() outputs
+
+# when coef() is used to combine two or more contrasts, then only topTable() output is useful
+
+geno_1 %>% filter(pval <= 0.05) %>% count()
+# 584 DE genes in first generation
+
+geno_2 %>% filter(pval <= 0.05) %>% count()
+# 978 DE genes in second generation
+
+geno_3 %>% filter(pval <= 0.05) %>% count()
+# 771 DE genes in third generation
+
+# Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
+geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
+geno_1v2 %>% count()
+# 77 trangen genes overlap
+
+geno_2v3 <- inner_join(subset(geno_2, geno_2$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+geno_2v3 %>% count()
+# 164 trangen genes overlap
+
+geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+geno_1v3 %>% count()
+# 66 trangen genes overlap
+
+geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
+geno_1v2v3 %>% count()
+# 12 trangen genes overlap across all three generations
+
+remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
+```
+
+4.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/_FC}
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 166 DE genes in first generation
+
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 9 DE gene in second generation
+
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 6 DE genes in third generation
+
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected but adjusted
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+```
+
+1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/o_FC}
+
+geno_1 %>% filter(qval <= 0.05) %>% count()
+# 55 DE genes in first generation
+
+geno_2 %>% filter(qval <= 0.05) %>% count()
+# 181 DE genes in second generation
+
+geno_3 %>% filter(qval <= 0.05) %>% count()
+# 69 DE genes in third generation
+
+# Genes that are DE across two generations without logFC; p-values uncorrected but adjusted
+geno_1v2 <- inner_join(subset(geno_1, geno_1$qval <= 0.05), subset(geno_2, geno_2$qval <= 0.05), by = "rowname")
+geno_1v2 %>% count()
+# 3 trangen genes overlap
+
+geno_2v3 <- inner_join(subset(geno_2, geno_2$qval <= 0.05), subset(geno_3, geno_3$qval <= 0.05), by = "rowname")
+geno_2v3 %>% count()
+# 10 trangen genes overlap
+
+geno_1v3 <- inner_join(subset(geno_1, geno_1$qval <= 0.05), subset(geno_3, geno_3$qval <= 0.05), by = "rowname")
+geno_1v3 %>% count()
+# 1 trangen genes overlap
+
+geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname") 
+geno_1v2v3 %>% count()
+# no trangen genes overlap across all three generations
+
+remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
+```
+
+3.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/_FC}
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 41 DE genes in first generation
+
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 1 DE gene in second generation
+
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 2 DE genes in third generation
+
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected but adjusted
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+```
+
+8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/o_adj_w/o_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
+# 1201 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.0) %>% count()
+# 0 DE genes in second generation
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
+# 30 DE genes in third generation
+```
+
+6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/o_adj_w/_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 238 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in third generation
+```
+
+7. Uncorrected, w/o FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/_adj_w/o_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05) %>% count()
+# 66 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.0) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05) %>% count()
+# 0 DE genes in third generation 
+```
+
+5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/_adj_w/_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 49 DE genes in first generation; 
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in third generation 
+```
+
+Observations:
+* The different models arranged by how many DE genes they produce in the first generation:
+2.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation --- most favorable
+4.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+3.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation --- expression plot?
+8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- most correct
+6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+7. Uncorrected, w/o FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+
+* Should probes with an average expression level below 3 be filtered out (line 701)? 
+```{r filtration}
+results <- read_csv("C:/Users/ameek/OneDrive/Desktop/results.csv",
+col_types = cols(gener = col_factor(levels = c("g1",
+"g2", "g3")), model = col_factor(levels = c("m1",
+"m2", "m3", "m4", "m5", "m6", "m7", "m8"))))
+
+ggplot(data = results, aes(x = model, y = genes, fill = gener)) + geom_bar(position = "dodge", stat = "identity") + facet_wrap(~filtration) + coord_cartesian(ylim = c(0, 1200))
+```
+Retaining low-expression probes does not make a difference to the rank of the models (ranked according to no. of DE genes observed in their respective first generations). But it gives rise to results that can only be explained as noise: an unreasonable number of DE genes in the second and third generations of models 1 and 3 (sometimes as much 25% of all probes), and a weird p-value histogram in the first generation. Thus, it would be most scientifically accurate to filter out low-expression probes.
+
+* How should the volcano plot be built?
+```{r volcano}
+volcanoplot(fit2_model_1, coef = 1, style = "p-value", highlight = 0, names = fit$genes$ID, hl.col = "blue",
+            xlab = "Log2 Fold Change", ylab = NULL, pch = 16, cex = 0.35, xlim = c(-6, 11), ylim = c(0,20))
+```
+Model 5 built with filtered probes gives a volcano plot with a furrow; in contrast, model5 with unfiltered probes has no furrow since the probes with low fold change mask out the furrow. Thus, it's better to filter out low expression probes.
+
+* How should the transgenerational expression pattern of a few representative (diabetes-relevant) genes be plotted?
+```{r expression_plots}
+
+# expression levels of each gene 'i' that is significantly DE across all three generations
+for (i in geno_1v2v3$rowname) {
+  print(
+    ggplot(data = pData(eset_mini), aes(x = generation, y = exprs(eset_mini)[i, ], fill = genotype)) +
+      geom_dotplot(position = position_dodge(1), binaxis = "y", stackdir = "center", alpha = 0.7) +
+      geom_boxplot(position = position_dodge(1), alpha = 0.7) +
+      ylab(i) +
+      theme_classic()
+  )
+}
+```
+The expression levels of most genes overlapped a lot between the control and test samples when they were selected based on only their p-values; to reduce the overlap, a fold-change cutoff (logFC >=1.2) was added to the selection criteria---the same principle which underlies a volcano plot. This would be the best way to show expression data to a general audience.
+
+* In the corrected model, how should FDR be controlled (i.e. how should model 3 be built)?
+
+`fdrtool()` applies tail area-based correction to control FDR; however, its output agrees with BH correction most of the time. Since BH correction is more understandable, use it instead of the former if using model 3.
+
+To do:
+[] - Repeat with other sex
+[] - Prepare Final List with #1
 
 ```{r p_value_loop, eval = FALSE}
 # plot p-value histograms of each ExpressionSet objects containing probes of different intensities 
@@ -1355,116 +1582,6 @@ hist(top_1$P.Value, breaks = 100, xlim = c(0,1),
       main = str_glue("p-value histogram of probes with intensities above {i} rma"))
 }
 ```
-
-```{r venn_overlap_w/_adj_w/o_FC}
-
-# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
-# to check the overlap between models look at the intersection of their respective topTable() outputs
-
-# when coef() is used to combine two or more contrasts, then only topTable() output is useful
-
-geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
-geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
-geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
-
-geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
-geno_2v3 <- inner_join(subset(geno_2, geno_2$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
-geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
-
-geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
-```
-
-```{r expression_plots_w/_adj_w/o_FC}
-
- # expression levels of each gene 'i' that is significantly DE across all three generations
-for(i in geno_1v2v3$rowname){
-  print(
-    ggplot(data = pData(eset_mini), aes(x = generation, y = exprs(eset_mini)[i, ], fill = genotype)) +
-      geom_dotplot(position = position_dodge(1), binaxis = "y", stackdir = "center", alpha = 0.7) +
-      geom_boxplot(position = position_dodge(1), alpha = 0.7) +
-      ylab(i) +
-      theme_classic()
-  )
-}
-```
-
-The expression levels of most genes overlapped a lot b/n the control and test samples since they were selected based on only their p-values; to reduce the overlap, a logFC cutoff of >=1.2 was added to the selection criteria---the same principle which underlies a volcano plot.
-
-```{r venn_overlap_w/_adj_w/_FC}
-
-# Genes that are DE across two generations with logFC >= 1.2; p-values corrected by the empirical null method
-geno_1v2_2 <- geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% 
-  inner_join( geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2))
-# 166 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-geno_2v3_2 <- geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% 
-  inner_join( geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2))
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-geno_1v3_2 <- geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% 
-  inner_join( geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2))
-# 166 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-
-
-# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected but adjusted
-top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# 49 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_2 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# 49 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-```
-
-```{r venn_overlap__w/o_adj_w/_FC}
-# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
-top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-```
-
-```{r venn_overlap__w/o_adj_w/o_FC}
-# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
-top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.0) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-
-top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
-# 238 DE genes in first generation; 
-# no genes found that are DE in second or third generation, hence no trangen gene overlap
-```
-
-Conclusion:
-1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation --- use latter 2 only
-2.   Corrected, w/o FC threshold, w/o  p value adj ---    DE genes found in 2nd & 3rd generation --- 
-3.   Corrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore
-4.   Corrected, w/  FC threshold, w/o  p value adj --- no DE genes found in 2nd & 3rd generation --- not done
-5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation --- ignore 
-6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- more 1st DE genes than in #1    --- *use for displaying expression levels and building volcano plots*
-7. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- most 1st DE genes than in #1/#4 --- *use with #1 to give to Abhay and for geo* 
-8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- not done
-
-To do:
-[] - Repeat with other sex
-[] - Prepare Final List with #1 and #5
 
 #
 [Ignore: section added between first and second update of the pipeline, [as seen in the history](<https://github.com/ameekbhalla/Microarray/commits/master/Microarray%20Pipeline.Rmd)]
