@@ -1318,7 +1318,7 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 
 ```
 
-2.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+1.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
 ```{r venn_overlap_w/o_adj_w/o_FC}
 
 # decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
@@ -1355,7 +1355,7 @@ geno_1v2v3 %>% count()
 remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
 ```
 
-4.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+2.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
 ```{r venn_overlap_w/_adj_w/_FC}
 geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
 # 166 DE genes in first generation
@@ -1380,7 +1380,7 @@ geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
 # no trangen gene overlap
 ```
 
-1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+3.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
 ```{r venn_overlap_w/_adj_w/o_FC}
 
 geno_1 %>% filter(qval <= 0.05) %>% count()
@@ -1412,7 +1412,7 @@ geno_1v2v3 %>% count()
 remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
 ```
 
-3.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+4.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
 ```{r venn_overlap_w/_adj_w/_FC}
 geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
 # 41 DE genes in first generation
@@ -1437,7 +1437,7 @@ geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
 # no trangen gene overlap
 ```
 
-8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+5. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
 ```{r venn_overlap__w/o_adj_w/o_FC}
 # Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
 top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
@@ -1476,7 +1476,7 @@ top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05) %>% count()
 # 0 DE genes in third generation 
 ```
 
-5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+8. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
 ```{r venn_overlap__w/_adj_w/_FC}
 # Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
 top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
@@ -1490,17 +1490,47 @@ top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) 
 ```
 
 Observations:
-* The different models arranged by how many DE genes they produce in the first generation:
-2.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation --- most favorable
-4.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
-1.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
-3.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation --- expression plot?
-8. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation --- most correct
-6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
-7. Uncorrected, w/o FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
-5. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
 
-* Should probes with an average expression level below 3 be filtered out (line 701)? 
+-   The different models arranged by how many DE genes they produce in the first generation:
+
++-------+----------------+-----------+------------+------------------+-----------------------+
+| model | empirical_null | fc_cutoff | p_value    | de               | remarks               |
++=======+================+===========+============+==================+=======================+
+| m1    | applied        | absent    | unadjusted | 0584, 0978, 0771 | most favorable        |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m2    | applied        | present   | unadjusted | 0166, 0009, 0006 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m3    | applied        | absent    | adjusted   | 0055, 0181, 0069 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m4    | applied        | present   | adjusted   | 0041, 0001, 0002 | for transgen exp plot |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m5    | unapplied      | absent    | unadjusted | 1201, 0000, 0030 | most correct          |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m6    | unapplied      | present   | unadjusted | 0238, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m7    | unapplied      | absent    | adjusted   | 0066, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m8    | unapplied      | present   | adjusted   | 0049, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m1    | applied        | absent    | unadjusted | 1039, 5030, 5257 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m2    | applied        | present   | unadjusted | 0166, 0009, 0006 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m3    | applied        | absent    | adjusted   | 0092, 3697, 3933 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m4    | applied        | present   | adjusted   | 0026, 0009, 0006 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m5    | unapplied      | absent    | unadjusted | 3707, 0000, 0127 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m6    | unapplied      | present   | unadjusted | 0231, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m7    | unapplied      | absent    | adjusted   | 0347, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+| m8    | unapplied      | present   | adjusted   | 0066, 0000, 0000 |                       |
++-------+----------------+-----------+------------+------------------+-----------------------+
+
+-   Should probes with an average expression level below 3 be filtered out (line 701)?
+
 ```{r filtration}
 results <- read_csv("C:/Users/ameek/OneDrive/Desktop/results.csv",
 col_types = cols(gener = col_factor(levels = c("g1",
@@ -1509,16 +1539,20 @@ col_types = cols(gener = col_factor(levels = c("g1",
 
 ggplot(data = results, aes(x = model, y = genes, fill = gener)) + geom_bar(position = "dodge", stat = "identity") + facet_wrap(~filtration) + coord_cartesian(ylim = c(0, 1200))
 ```
-Retaining low-expression probes does not make a difference to the rank of the models (ranked according to no. of DE genes observed in their respective first generations). But it gives rise to results that can only be explained as noise: an unreasonable number of DE genes in the second and third generations of models 1 and 3 (sometimes as much 25% of all probes), and a weird p-value histogram in the first generation. Thus, it would be most scientifically accurate to filter out low-expression probes.
 
-* How should the volcano plot be built?
+    Retaining low-expression probes does not make a difference to the rank of the models (ranked according to no. of DE genes observed in their respective first generations). But it gives rise to results that can only be explained as noise: an unreasonable number of DE genes in the second and third generations of models 1 and 3 (sometimes as much 25% of all probes), and a weird p-value histogram in the first generation. Thus, it would be most scientifically accurate to filter out low-expression probes.
+
+-   How should the volcano plot be built?
+
 ```{r volcano}
 volcanoplot(fit2_model_1, coef = 1, style = "p-value", highlight = 0, names = fit$genes$ID, hl.col = "blue",
             xlab = "Log2 Fold Change", ylab = NULL, pch = 16, cex = 0.35, xlim = c(-6, 11), ylim = c(0,20))
 ```
-Model 5 built with filtered probes gives a volcano plot with a furrow; in contrast, model5 with unfiltered probes has no furrow since the probes with low fold change mask out the furrow. Thus, it's better to filter out low expression probes.
 
-* How should the transgenerational expression pattern of a few representative (diabetes-relevant) genes be plotted?
+    Model 5 built with filtered probes gives a volcano plot with a furrow; in contrast, model5 with unfiltered probes has no furrow since the probes with low fold change mask out the furrow. Thus, it's better to filter out low expression probes.
+
+-   How should the transgenerational expression pattern of a few representative (diabetes-relevant) genes be plotted?
+
 ```{r expression_plots}
 
 # expression levels of each gene 'i' that is significantly DE across all three generations
@@ -1532,11 +1566,12 @@ for (i in geno_1v2v3$rowname) {
   )
 }
 ```
-The expression levels of most genes overlapped a lot between the control and test samples when they were selected based on only their p-values; to reduce the overlap, a fold-change cutoff (logFC >=1.2) was added to the selection criteria---the same principle which underlies a volcano plot. This would be the best way to show expression data to a general audience.
 
-* In the corrected model, how should FDR be controlled (i.e. how should model 3 be built)?
+    The expression levels of most genes overlapped a lot between the control and test samples when they were selected based on only their p-values; to reduce the overlap, a fold-change cutoff (logFC \>=1.2) was added to the selection criteria---the same principle which underlies a volcano plot.This would be the best way to show expression data to a general audience.
 
-`fdrtool()` applies tail area-based correction to control FDR; however, its output agrees with BH correction most of the time. Since BH correction is more understandable, use it instead of the former if using model 3.
+-   In the corrected model, how should FDR be controlled (i.e. how should model 3 be built)?
+
+    `fdrtool()` applies tail area-based correction to control FDR; however, its output agrees with BH correction most of the time; since BH correction is more understandable, use it instead of the former if using model 3.
 
 To do:
 [] - Repeat with other sex
