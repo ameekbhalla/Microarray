@@ -1491,53 +1491,57 @@ top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) 
 
 Observations:
 
--   The different models arranged by how many DE genes they produce in the first generation:
-
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| model | empirical_null | fc_cutoff | p_value    | de               | remarks               |
-+=======+================+===========+============+==================+=======================+
-| m1    | applied        | absent    | unadjusted | 0584, 0978, 0771 | most favorable        |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m2    | applied        | present   | unadjusted | 0166, 0009, 0006 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m3    | applied        | absent    | adjusted   | 0055, 0181, 0069 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m4    | applied        | present   | adjusted   | 0041, 0001, 0002 | for transgen exp plot |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m5    | unapplied      | absent    | unadjusted | 1201, 0000, 0030 | most correct          |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m6    | unapplied      | present   | unadjusted | 0238, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m7    | unapplied      | absent    | adjusted   | 0066, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m8    | unapplied      | present   | adjusted   | 0049, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m1    | applied        | absent    | unadjusted | 1039, 5030, 5257 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m2    | applied        | present   | unadjusted | 0166, 0009, 0006 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m3    | applied        | absent    | adjusted   | 0092, 3697, 3933 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m4    | applied        | present   | adjusted   | 0026, 0009, 0006 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m5    | unapplied      | absent    | unadjusted | 3707, 0000, 0127 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m6    | unapplied      | present   | unadjusted | 0231, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m7    | unapplied      | absent    | adjusted   | 0347, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-| m8    | unapplied      | present   | adjusted   | 0066, 0000, 0000 |                       |
-+-------+----------------+-----------+------------+------------------+-----------------------+
-
 -   Should probes with an average expression level below 3 be filtered out (line 701)?
 
 ```{r filtration}
-results <- read_csv("C:/Users/ameek/OneDrive/Desktop/results.csv",
-col_types = cols(gener = col_factor(levels = c("g1",
-"g2", "g3")), model = col_factor(levels = c("m1",
-"m2", "m3", "m4", "m5", "m6", "m7", "m8"))))
-
-ggplot(data = results, aes(x = model, y = genes, fill = gener)) + geom_bar(position = "dodge", stat = "identity") + facet_wrap(~filtration) + coord_cartesian(ylim = c(0, 1200))
+# The different models arranged by how many DE genes they produce in the first generation:
+# If pasted outside the code chunk, the following table will be rendered automatically as an HTML table 
+("
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtration | model | empirical_null | fc_cutoff | p_value    | g1   | g2   | g3   | remarks               |
++:===========+:======+:===============+:==========+:===========+=====:+=====:+=====:+=======================+
+| filtered   | m1    | applied        | absent    | unadjusted | 584  | 978  | 771  | most_favorable        |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m2    | applied        | present   | unadjusted | 166  | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m3    | applied        | absent    | adjusted   | 55   | 181  | 69   |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m4    | applied        | present   | adjusted   | 41   | 1    | 2    | for_transgen_exp_plot |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m5    | unapplied      | absent    | unadjusted | 1201 | 0    | 30   | most_stringent        |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m6    | unapplied      | present   | unadjusted | 238  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m7    | unapplied      | absent    | adjusted   | 66   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m8    | unapplied      | present   | adjusted   | 49   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m1    | applied        | absent    | unadjusted | 1039 | 5030 | 5257 |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m2    | applied        | present   | unadjusted | 120  | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m3    | applied        | absent    | adjusted   | 92   | 3697 | 3933 |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m4    | applied        | present   | adjusted   | 26   | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m5    | unapplied      | absent    | unadjusted | 3707 | 0    | 127  |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m6    | unapplied      | present   | unadjusted | 231  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m7    | unapplied      | absent    | adjusted   | 347  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m8    | unapplied      | present   | adjusted   | 66   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+  ") %>% 
+  str_remove_all("[ \\-\\+\\=\\:]") %>% # converts into a string while returning only the '|'
+  read_delim(delim = '|', col_types = "_fffffdddc_") %>% # reads in as a data frame; skips empty colns
+  gather(g1, g2, g3, key = "gener", value = "genes") %>% # converts the data frame into long form
+  ggplot(aes(x = model, y = genes, fill = gener)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  facet_wrap(~filtration) + # faceting by filtration status of the probes
+  coord_cartesian(ylim = c(0, 1200)) # truncates out excessively long bars
+# The first gener DE genes decrease from m1 to m4, then m5 to m8;
+# An almost identical pattern is observed with unfiltered probes.
 ```
 
     Retaining low-expression probes does not make a difference to the rank of the models (ranked according to no. of DE genes observed in their respective first generations). But it gives rise to results that can only be explained as noise: an unreasonable number of DE genes in the second and third generations of models 1 and 3 (sometimes as much 25% of all probes), and a weird p-value histogram in the first generation. Thus, it would be most scientifically accurate to filter out low-expression probes.
