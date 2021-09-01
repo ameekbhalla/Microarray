@@ -1495,7 +1495,7 @@ Observations:
 
 ```{r filtration}
 # The different models arranged by how many DE genes they produce in the first generation:
-# If pasted outside the code chunk, the following table will be rendered automatically as an HTML table 
+# If pasted outside the code chunk, the following code-table will be rendered as an HTML-table in the visual editor
 ("
 +------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
 | filtration | model | empirical_null | fc_cutoff | p_value    | g1   | g2   | g3   | remarks               |
@@ -1534,13 +1534,14 @@ Observations:
 +------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
   ") %>% 
   str_remove_all("[ \\-\\+\\=\\:]") %>% # converts into a string while returning only the '|'
-  read_delim(delim = '|', col_types = "_fffffdddc_") %>% # reads in as a data frame; skips empty colns
+  read_delim(delim = '|', col_types = "_fffffdddc_") %>% # reads in as a data frame; skips empty columns
+  # gt::gt() # renders as an HTML table in the viewer
   gather(g1, g2, g3, key = "gener", value = "genes") %>% # converts the data frame into long form
   ggplot(aes(x = model, y = genes, fill = gener)) + 
   geom_bar(position = "dodge", stat = "identity") + 
   facet_wrap(~filtration) + # faceting by filtration status of the probes
   coord_cartesian(ylim = c(0, 1200)) # truncates out excessively long bars
-# The first gener DE genes decrease from m1 to m4, then m5 to m8;
+# If filtered, the first generation DE probes decrease from m1 to m4, then again from m5 to m8;
 # An almost identical pattern is observed with unfiltered probes.
 ```
 
