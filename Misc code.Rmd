@@ -4,32 +4,21 @@ output: html_notebook
 editor_options: 
   chunk_output_type: console
 ---
-we add “feature data”, i.e. annotation information to the probes stored in the featureData of our ExpressionSet. We used the function `select` from the package `AnnotationDbi` to query the gene symbols and associated short descriptions for all the probes. `AnnotationDbi` provides a user interface for annotation data packages built using SQLite. For each probe, we added the gene symbol (SYMBOL) and a short description of the gene the probe represents (GENENAME).
+we add “feature data”, i.e. annotation information to the probes stored in the featureData of our ExpressionSet. We used the function `select` from the package `AnnotationDbi` to query the gene symbols and associated short descriptions for all the probes. `AnnotationDbi` provides a user interface to annotation data packages built using SQLite. For each probe, we added the gene symbol (SYMBOL) and a short description of the gene the probe represents (GENENAME).
 
 In a second step, we filtered out the probes that do not map to a gene, i.e. that do not have a gene symbol assigned. This step also removes the quality control probes.
 
 ```{r}
 #annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
-fData(eset_mini) <- AnnotationDbi::select(drosophila2.db,
+anno_eset <- AnnotationDbi::select(drosophila2.db,
                                        keys = (featureNames(eset)), #indexes the rows
                                        columns = c("SYMBOL", "GENENAME"), #indexes the columns
-                                       keytype = "PROBEID") #arranges the output by this column
-
-#ExpressionSet objects cannot be subset with filter() or subset()
-HasSymbol <- !is.na(fData(eset)$Symbol) #this also removes quality control probes
-eset <- eset[HasSymbol, ] 
-
-
-
+                                       keytype = "PROBEID") %>% #arranges the output by this column
+  filter(!is.na(SYMBOL)) %>% # this also removes quality control probes
+  group_by(PROBEID) %>%
+  filter(n() == 1) # remove  probes which have multiple genes associated with them
 # check that all quality control probes, containing the pattern AFFX in their name, were removed
 # str_detect(anno_eset$PROBEID, "AFFX") %>% sum()
-
-anno_grouped <- group_by(anno_eset, PROBEID)
-anno_summarized <- dplyr::summarize(anno_grouped, no_of_matches = n_distinct(SYMBOL))
-anno_filtered <- filter(anno_summarized, no_of_matches > 1)
-nrow(anno_filtered)
-
-filter(anno_eset, PROBEID == anno_filtered$PROBEID[i])
 ```
 
 ### should
