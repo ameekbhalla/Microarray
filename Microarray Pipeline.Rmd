@@ -1326,13 +1326,13 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 
 # when coef() is used to combine two or more contrasts, then only topTable() output is useful
 
-geno_1 %>% filter(pval <= 0.05) %>% count()
+geno_1 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 584 DE genes in first generation
 
-geno_2 %>% filter(pval <= 0.05) %>% count()
+geno_2 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 978 DE genes in second generation
 
-geno_3 %>% filter(pval <= 0.05) %>% count()
+geno_3 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 771 DE genes in third generation
 
 # Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
