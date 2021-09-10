@@ -1278,13 +1278,19 @@ library(fdrtool)
 
 ## group-means interaction model
 
+fdr_1_0 <- (top_1_geno_0$t - median(top_1_geno_0$t)) %>% fdrtool(statistic = "normal", plot = F)
 fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic = "normal", plot = F)
 fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic = "normal", plot = F)
 fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic = "normal", plot = F)
 
+geno_0 <- bind_cols(top_1_geno_0, fdr_1_0) %>% rownames_to_column()
 geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
 geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
 geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
+
+qplot(fdr_1_0$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
 
 qplot(fdr_1_1$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
   theme_classic() +
@@ -1342,6 +1348,11 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 
 # when coef() is used to combine two or more contrasts, then only topTable() output is useful
 
+#addition of the F0 generation caused a slight change in the number of DE genes observed in subsequent generations also. Probably each additional data point gets included in the Bayesian shrinker
+
+geno_0 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+# 1126 DE genes in first generation
+
 geno_1 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 584 DE genes in first generation
 
@@ -1350,6 +1361,11 @@ geno_2 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PRO
 
 geno_3 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 771 DE genes in third generation
+
+# Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
+geno_0v1 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_1, geno_1$pval <= 0.05), by = "rowname")
+geno_0v1 %>% count()
+# 342 trangen genes overlap
 
 # Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
 geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
@@ -1364,11 +1380,23 @@ geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_
 geno_1v3 %>% count()
 # 66 trangen genes overlap
 
+geno_0v2 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
+geno_0v2 %>% count()
+# 116 trangen genes overlap
+
+geno_0v3 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+geno_0v3 %>% count()
+# 118 trangen genes overlap
+
+geno_0v1v2v3 <- geno_0v1 %>% inner_join(geno_1v2, by = "rowname") %>% inner_join(geno_2v3, by = "rowname")
+geno_0v1v2v3 %>% count()
+# 10 trangen genes overlap across all four generations
+
 geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
 geno_1v2v3 %>% count()
 # 12 trangen genes overlap across all three generations
 
-remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
+remove(geno_0v1, geno_0v2, geno_0v3, geno_1v2, geno_2v3, geno_1v3, geno_1v2v3, geno_0v1v2v3)
 ```
 
 2.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
@@ -1593,6 +1621,10 @@ for (i in geno_1v2v3$rowname) {
 -   In the corrected model, how should FDR be controlled (i.e. how should model 3 be built)?
 
     `fdrtool()` applies tail area-based correction to control FDR; however, its output agrees with BH correction most of the time; since BH correction is more understandable, use it instead of the former if using model 3.
+
+-   What the DE analysis be started at F0 or F1; what should be F1 genotype?
+
+    Start at F0. F2 is trangenerational with respect to F0 and F3 is transgenerational with respect to F1. Thus we chan check for TEI of both the construct plus balancers and the independent effect of balancers.
 
 To do:
 [] - Repeat with other sex
