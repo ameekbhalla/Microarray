@@ -606,7 +606,19 @@ pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.character()
 # pData(eset_mini)[generation_F0, "generation"] <- "F0"
 
 #split the `generation` "F0 + F1" into F0 and F1
-pData(eset_mini) <- pData(eset_mini) %>% mutate(generation = case_when(genotype == "rpr/cyo; dilp3/ser" ~ "F0", genotype == "cyo/+; ser/+" ~ "F1", genotype == "w1118" ~ "F1", generation == "F2" ~ "F2", generation == "F3" ~ "F3"), genotype =  case_when(genotype == "rpr/cyo; dilp3/ser" ~ "test", genotype == "cyo/+; ser/+" ~ "test", genotype == "w1118" ~ "control", genotype == "test" ~ "test", genotype == "control" ~ "control"))
+pData(eset_mini) <- pData(eset_mini) %>% 
+  mutate(generation = 
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "F0", 
+                     genotype == "cyo/+; ser/+" ~ "F1", 
+                     genotype == "w1118" ~ "F1", 
+                     generation == "F2" ~ "F2", generation == "F3" ~ "F3"), 
+         genotype =  
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "test", 
+                     genotype == "cyo/+; ser/+" ~ "test", 
+                     genotype == "w1118" ~ "control",
+                     genotype == "test" ~ "test", 
+                     genotype == "control" ~ "control")
+         )
 
 #convert the `generation` column  back to a factor vecor
 pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.factor()
@@ -693,7 +705,8 @@ fit_model_1 <- lmFit(eset_mini, design_1,
 cm_1_genotype_simple <- makeContrasts(
   gen_1_geno = (F1.test.female - F1.control.female),
   gen_2_geno = (F2.test.female - F2.control.female),
-  gen_3_geno = (F3.test.female - F3.control.female), gen_0_geno = (F0.test.female - F1.control.female),
+  gen_3_geno = (F3.test.female - F3.control.female), 
+  gen_0_geno = (F0.test.female - F1.control.female),
   levels = design_1)
 
 cm_1_genotype_simple
@@ -733,11 +746,14 @@ top_1_geno_3 <- topTable(fit2_model_1,
                   coef=c(3),
                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-top_1_geno_0 <- topTable(fit2_model_1, coef = c(4), adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+hist(top_1_geno_0$P.Value)
 hist(top_1_geno_1$P.Value)
 hist(top_1_geno_2$P.Value)
 hist(top_1_geno_3$P.Value)
-hist(top_1_geno_0$P.Value)
 # qplot(top_1_geno$P.Value,
 #       geom="histogram",
 # # specify the size of the class interval
