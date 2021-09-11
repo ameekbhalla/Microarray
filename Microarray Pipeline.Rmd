@@ -646,7 +646,7 @@ Build the design matrix using the group-means prametrization. To do so combine a
 group <- with(pData(eset_mini), 
               paste(generation,
                     genotype, 
-                    sex,
+                    # sex,
                     # day,
                     sep = "."))
 
@@ -703,10 +703,10 @@ fit_model_1 <- lmFit(eset_mini, design_1,
 # it estimates the simple effect of genotype at each level of generation
 
 cm_1_genotype_simple <- makeContrasts(
-  gen_1_geno = (F1.test.female - F1.control.female),
-  gen_2_geno = (F2.test.female - F2.control.female),
-  gen_3_geno = (F3.test.female - F3.control.female), 
-  gen_0_geno = (F0.test.female - F1.control.female),
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
   levels = design_1)
 
 cm_1_genotype_simple
@@ -770,8 +770,8 @@ hist(top_1_geno_3$P.Value)
 #   thekme_classic() +
 #   theme(plot.title = element_text(hjust = 0.5, vjust = -1),
 #         plot.subtitle = element_text(hjust = 0.5, vjust = -1))
-
-#####
+```
+```{r group_means_interaction_2}
 ## Build the contrasts matrix for discovering main effect of generation in females
 
 # 1. ANOVA for main effect of generation; the following two formulations are algebraically equal;
