@@ -667,6 +667,10 @@ colSums(design_1)
 corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$replicate)
 corfit_1$consensus
 
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
 #fit the linear model fit_model_1 with blocking
 fit_model_1 <- lmFit(eset_mini, design_1, 
                      block =  pData(eset_mini)$replicate, 
@@ -1349,51 +1353,53 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 # when coef() is used to combine two or more contrasts, then only topTable() output is useful
 
 #addition of the F0 generation caused a slight change in the number of DE genes observed in subsequent generations also. Probably each additional data point gets included in the Bayesian shrinker
+# by_sex2 <- data.frame(matrix(ncol = 12, nrow = 1))
+by_sex2 <- rbind(by_sex2, NA)
 
-geno_0 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+by_sex2$geno_0[by_sex2 %>% nrow()] <- geno_0 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 1126 DE genes in first generation
 
-geno_1 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+by_sex2$geno_1[by_sex2 %>% nrow()] <- geno_1 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 584 DE genes in first generation
 
-geno_2 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+by_sex2$geno_2[by_sex2 %>% nrow()] <- geno_2 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 978 DE genes in second generation
 
-geno_3 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+by_sex2$geno_3[by_sex2 %>% nrow()] <- geno_3 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
 # 771 DE genes in third generation
 
 # Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
 geno_0v1 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_1, geno_1$pval <= 0.05), by = "rowname")
-geno_0v1 %>% count()
+by_sex2$geno_0v1[by_sex2 %>% nrow()] <- geno_0v1 %>% count()
 # 342 trangen genes overlap
 
 # Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
 geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
-geno_1v2 %>% count()
+by_sex2$geno_1v2[by_sex2 %>% nrow()] <- geno_1v2 %>% count()
 # 77 trangen genes overlap
 
 geno_2v3 <- inner_join(subset(geno_2, geno_2$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
-geno_2v3 %>% count()
+by_sex2$geno_2v3[by_sex2 %>% nrow()] <- geno_2v3 %>% count()
 # 164 trangen genes overlap
 
 geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
-geno_1v3 %>% count()
+by_sex2$geno_1v3[by_sex2 %>% nrow()] <- geno_1v3 %>% count()
 # 66 trangen genes overlap
 
 geno_0v2 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
-geno_0v2 %>% count()
+by_sex2$geno_0v2[by_sex2 %>% nrow()] <- geno_0v2 %>% count()
 # 116 trangen genes overlap
 
 geno_0v3 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
-geno_0v3 %>% count()
+by_sex2$geno_0v3[by_sex2 %>% nrow()] <- geno_0v3 %>% count()
 # 118 trangen genes overlap
 
 geno_0v1v2v3 <- geno_0v1 %>% inner_join(geno_1v2, by = "rowname") %>% inner_join(geno_2v3, by = "rowname")
-geno_0v1v2v3 %>% count()
+by_sex2$geno_0v1v2v3[by_sex2 %>% nrow()] <- geno_0v1v2v3 %>% count()
 # 10 trangen genes overlap across all four generations
 
 geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
-geno_1v2v3 %>% count()
+by_sex2$geno_1v2v3[by_sex2 %>% nrow()] <- geno_1v2v3 %>% count()
 # 12 trangen genes overlap across all three generations
 
 remove(geno_0v1, geno_0v2, geno_0v3, geno_1v2, geno_2v3, geno_1v3, geno_1v2v3, geno_0v1v2v3)
