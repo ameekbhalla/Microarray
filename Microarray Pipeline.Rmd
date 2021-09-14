@@ -1344,6 +1344,29 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 
 ```
 
+```{r data_export}
+library(XLConnect)
+f0 <- geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% 
+  #select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
+View()
+male <- loadWorkbook("male.xlsx", create = TRUE)
+createSheet(male, "f0")
+writeWorksheet(male, f0, "f0")
+
+f1 <- geno_1 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
+createSheet(male, "f1")
+writeWorksheet(male, f1, "f1")
+
+f2 <- geno_2 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
+createSheet(male, "f2")
+writeWorksheet(male, f2, "f2")
+
+f3 <- geno_3 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
+createSheet(male, "f3")
+writeWorksheet(male, f3, "f3")
+saveWorkbook(male, "male.xlsx")	
+```
+
 1.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
 ```{r venn_overlap_w/o_adj_w/o_FC}
 
