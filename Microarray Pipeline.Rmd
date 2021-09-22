@@ -78,7 +78,7 @@ This causes preferntial amplification of the 3' region adjacent to poly(A) tail 
 To open CEL files of 3' IVT Arrays use the `affy` package. Its `ReadAffy()` function reads all the .CEL files present in the folder and loads them into an AffyBatch object in R. 
 Use the argument celfile.path to specify the location of the folder that contains the CEL files; the `.` symbol specifies that the path to the folder `CEL Files` ends in the current project directory. 
 
-```{r}
+```{r import_CEL}
 raw_data <- ReadAffy(celfile.path = "./CEL Files")
 ```
 Thus, you obtain an AffyBatch object`raw_data` containing the data from all your CEL files. 
@@ -93,7 +93,7 @@ The row names of the `phenoData` must match the column names of the expression m
 
 The `samples_data.csv` file in the project directory contains descritptive features for each sample. Import the file into an obeject called `sample_data` and specify what kind of data each of its column contains. 
 
-```{r}
+```{r import_anno}
 sample_data <- read_csv(
   "sample_data.csv", 
   col_types = cols(
@@ -112,7 +112,7 @@ sample_data <- read_csv(
 
 Use `sample_data` to populate the `phenoData` data frame inside the Affybatch object (accessed using `pData()` but set using `phenoData()`). 
 
-```{r}
+```{r assign_anno}
 phenoData(raw_data) <- AnnotatedDataFrame(sample_data)
 ```
 
@@ -128,13 +128,13 @@ The file named 2y (created on June 17) is for chip 4y, while the file named real
 
 The corrected and cleaned up sample names (without the string '_(Drosophila_2).CEL') are present in the `label` column of the file `samples_data.csv` imported earlier. Use `sampleNames()` to access and replace the default sample names. 
 
-```{r}
+```{r rename_sample}
 sampleNames(raw_data) <- sample_data$label
 ```
 
 Finally, we perform multiple checks to ensure that the names were assigned in the proper sequence. As sateted already, for an Affybatch object to be valid, the row names of its `phenoData` must match the column names of its expression matrix, while the row names of the expression matrix much match the row names of its `featureData`.
 
-```{r}
+```{r check_object}
 
 all(colnames(exprs(raw_data)) == rownames(pData(raw_data)))
 
@@ -156,7 +156,7 @@ It's necessary to visualize the data before and after each processing step.
 To display and contrast the distribution of expression values of multiple arrays on the same plot use `plotDensities()` from the `limma` package. 
 Later, this function can be especially helpful to observe the effects of between-array quantile normalization, as mentioned in the package documentation.
 
-```{r eval = FALSE}
+```{r raw_intensities eval = FALSE}
 raw_expression <- exprs(raw_data) %>% #plotDensities() accepts only matrix/ExpressionSet objects
                   log2() #the data is log2 scaled to linearize it across different orders of magnitude 
 
@@ -239,7 +239,7 @@ The data were pre-processed separately by `affy::rma()` and `gcrma::gcrma()` and
 
 ```{r eval = FALSE}
 # Optional: remove generations "F-1" and "F0 + F1" before pre-processing
-keep <- which(pData(raw_data)$generation != "F-1" & pData(raw_data)$generation != "F0 + F1")
+keep <- which(pData(raw_data)$generation != "F-1")
 
 raw_data <- raw_data[ , keep] #ExpressionSet objects cannot be subset with filter() or filter()  
 
@@ -248,16 +248,75 @@ pData(raw_data)$generation <- pData(raw_data)$generation %>% droplevels()
 
 # subsetting an AffyBatch object removes row names so they need be reassigned
 sampleNames(raw_data) <- pData(raw_data)$label
+
+# steps for generating the spreadsheets to be submitted to GEO
+# STep 1: Metadaa generation
+# Metadata <- sample_data %>%
+#   rename(lot = replicate, batch = day) %>% # rename the colns lot to replicate and batch to day
+#   mutate(
+#     replicate = case_when( # assign replicates numbers from 1-4 to different lots
+#       lot == "L5" | lot == "L4" ~ "rep1",
+#       lot == "L9" | lot == "L8" ~ "rep2",
+#       lot == "L10"              ~ "rep3",
+#       TRUE                      ~ "rep4") %>% as_factor(),
+#     lineage = case_when( # categorize genotypes into test or control lineages
+#       genotype == "rpr/cyo; dilp3/ser" ~ "test",
+#       genotype == "rpr/+; dilp3/+" ~ "test",
+#       genotype == "cyo/+; dilp3/+" ~ "test",
+#       genotype == "rpr/+; ser/+" ~ "test",
+#       genotype == "cyo/+; ser/+" ~ "test",
+#       genotype == "test" ~ "test",
+#       TRUE ~ "control") %>% as_factor(),
+#     genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+#       genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+#       genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+#       genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+#       genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+#       genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+#       TRUE    ~ "w1118") %>% as_factor(),
+#     generation = case_when( # convert all non-transgenic lineages into w1118 genotype
+#       generation == "F0 + F1" & genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+#       generation == "F2" ~ "F2",
+#       generation == "F3" ~ "F3",
+#       TRUE ~ "F1") %>% as_factor(),
+#     description = case_when( # broad descriptions that cannot be easily dissected into the other fields.
+#       genotype == "rpr/cyo; dilp3/ser" ~ "Gene expression data from flies carrying both the constructs required to ablate insulin-producing cells with balancers",
+#       genotype == "rpr/+; dilp3/+"     ~ "Gene expression data from flies carrying both the constructs required to ablate insulin-producing cells without balancers",
+#       genotype == "cyo/+; dilp3/+" ~ "Gene expression data from flies missing one of the constructs required to ablate insulin-producing cells",
+#       genotype == "rpr/+; ser/+" ~ "Gene expression data from flies missing one of the constructs required to ablate insulin-producing cells",
+#       genotype == "cyo/+; ser/+" ~ "Gene expression data from flies carrying only balancer chromosomes",
+#       genotype == "w1118" ~ "Gene expression data from w1118 flies free of all transgenic constructs"),
+#     source_name = case_when( # Briefly identify the biological material and the experimental variable(s),
+#       genotype == "rpr/cyo; dilp3/ser" & generation == "F0" ~ "F0 founder of the test lineage raised concurrently with the F1 test and F1 control",
+#       genotype == "rpr/+; dilp3/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "cyo/+; dilp3/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "rpr/+; ser/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "cyo/+; ser/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F1" ~ "F1 descendant of the control lineage; serves as control for both F0 test and F1 test",
+#       genotype == "w1118" & generation == "F2" & lineage == "test" ~ "F2 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F2" & lineage == "control" ~ "F2 descendant of the control lineage",
+#       genotype == "w1118" & generation == "F3" & lineage == "test" ~ "F3 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F3" & lineage == "control" ~ "F3 descendant of the control lineage")
+#     ) %>% select(label, file_name, batch, sex, generation, genotype, lineage, replicate, description, source_name)
+
+# library(XLConnect)
+# for_geo <- loadWorkbook("for_geo.xlsx", create = TRUE)
+# createSheet(for_geo, "Metadata")
+# writeWorksheet(for_geo, Metadata, "Metadata")
+# saveWorkbook(for_geo, "for_geo.xlsx")
+
+# Step 2: Matrix generation
+# write.csv(exprs(eset), "Matrix.csv")
 ```
 
-```{r}
+```{r gcrma}
 eset <- gcrma(raw_data)
 #eset2 <- rma(raw_data)
 ```
 
 The ExpressionSet obejects were filtered to remove genes with low expression and then the expression densities were plotted.
 
-```{r eval=FALSE}
+```{r gcrma_intesities eval=FALSE}
 eset_list <- list()
 eset2_list <- list()
 
@@ -309,7 +368,7 @@ Label the samples according to the following covariates and check if they fall i
 4. generation (F-1, F0 + F1, F2, or F3)
 5. replicate (lot for three-generation descent)
 
-```{r eval = FALSE}
+```{r mds_whole eval = FALSE}
 plotMDS(eset, labels = pData(eset)$sex, gene.selection = "common",
         main = "Variation in expression according to sex (whole data)")
 
@@ -331,7 +390,7 @@ Therefore, sex is the biggest source of variation in expression.
 
 The samples were subset to remove the variation due to sex and the MDS plots were re-made with the remaining covariates.
  
-```{r eval = FALSE}
+```{r mds_female eval = FALSE}
 sample_names_f <- which(pData(eset)$sex == "female")
 
 eset_f <- eset[ , sample_names_f] #ExpressionSet objects cannot be subset with filter() or filter()
@@ -374,7 +433,7 @@ The loose clustering becomes clearer if outliers from replicate L9 are removed (
 
 The above pattern repeats with the male samples, the only difference being that 'Principal Component 2' is slightly shorter than observed for females.
 
-```{r eval = FALSE}
+```{r mds_male eval = FALSE}
 sample_names_m <- which(pData(eset)$sex == "male")
 
 eset_m <- eset[ , sample_names_m] #ExpressionSet objects cannot be subset with filter() or filter()
@@ -415,7 +474,7 @@ plotMDS(eset_m, labels = pData(eset_m)$day, gene.selection = "common",
 
 To prove that the variation between the clusters across 'Principal Component 1' is not biological but technical, subset and plot just the wild-type samples from all the generations, thereby removing the scope for biological variation.
 
-```{r eval = FALSE}
+```{r mds_wt eval = FALSE}
 f_wt <- which(pData(eset)$sex      == "female"& ( 
               pData(eset)$genotype == "control" | 
               pData(eset)$genotype == "w1118"   | 
@@ -486,7 +545,7 @@ Accordingly, use it for making the following two plots to check if the signal-to
 An MDS plots, of the samples labeled by their batches to check if their effect has been removed.
 An MDS plots, of the samples labeled by their treatment to check if its effect has been enhanced.
 
-```{r eval = FALSE}
+```{r batch_effect_correction eval = FALSE}
 eset2 <- removeBatchEffect(eset, batch = pData(eset)$day)
 
 plotMDS(eset2, labels = pData(eset)$sex, gene.selection = "common",

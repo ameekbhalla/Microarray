@@ -1,0 +1,2071 @@
+---
+title: "Microarray Pipeline"
+author: "Ameek Bhalla"
+editor_options:
+  chunk_output_type: console
+output:
+  html_notebook:
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_depth: '2'
+    toc_float: yes
+  html_document:
+    df_print: paged
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_depth: '2'
+    toc_float: yes
+bibliography: Microarray references.bib
+---
+
+***
+
+# Useful commands
+
+* Insert a link: `[R Markdown](http://rmarkdown.rstudio.com)`
+* Insert a new chunk: `Ctrl+Alt+I`
+* Execute a code chunk: `Ctrl+Shift+Enter`
+* Preview the html file: `Ctrl+Shift+K`
+* Install Bioconductor
++ quietly check if Bioconductor is already installed
+   `if(!requireNamespace("BiocManager", quietly = TRUE))`
++ install Bioconductor if not in Namespace:
+    `install.packages("BiocManager")` 
+* Install a Bioconductor package:`BiocManager::install("package.name")`
+
+# Setup
+
+
+The default chunk options can be set in the first chunk itself. Later, the behaviour of individuals chunks can be modified by modifying a specific argument.
+
+```{r setup results = "hide"}
+## Set default chunk options
+
+knitr::opts_chunk$set(results = "hide", 
+                      tidy = TRUE)
+## Load Packages
+library(affy) # Bioconductor package for analysis of older Affymetrix arrays
+#library(affyio)
+#library(affyPLM)
+#library(annaffy)
+#library(annotate)
+#library(arrayQualityMetrics)
+library(BiocManager)
+library(drosophila2.db) # annotation package for the model organism
+library(drosophila2cdf)
+library(formatR)
+library(gcrma)
+library(htmltools)
+library(knitr)
+library(limma)
+#library(markdown)
+library(rmarkdown)
+#library(simpleaffy)
+library(tidyverse)
+```
+
+# Importing data into R
+
+## Importing CEL files into R
+
+In 3' IVT arrays, the probe set matches the 600bp region adjacent to the 3' end of a transcript. 
+This is because 3' IVT assays use oligo-dT primers during the cDNA step. 
+This causes preferntial amplification of the 3' region adjacent to poly(A) tail of the mRNA. 
+3' IVT assays are most commonly used for whole-genome transcriptome experiments. In the newer, exon arrays, the probe sets match exons distributed throughout a transcript [see @Dalma-Weiszhausz2006, Fig. 4].
+
+To open CEL files of 3' IVT Arrays use the `affy` package. Its `ReadAffy()` function reads all the .CEL files present in the folder and loads them into an AffyBatch object in R. 
+Use the argument celfile.path to specify the location of the folder that contains the CEL files; the `.` symbol specifies that the path to the folder `CEL Files` ends in the current project directory. 
+
+```{r import_CEL}
+raw_data <- ReadAffy(celfile.path = "./CEL Files")
+```
+Thus, you obtain an AffyBatch object`raw_data` containing the data from all your CEL files. 
+However, the AffyBatch object is just a container holding mutliple matrices and data frames together. Each of thee is meant to be populated by a different kind of data:
+1. A matrix accessed by`exprs()` that is automatically populated with the expression values of the probes when the Affybatch object is created. 
+2. An initially empty data frame acceessed by `phenoData()` that is meant to be populated with sample annotation (treatment group, sample number etc.). 
+3. An initially empty data frame acceessed by `featureData()` that is meant to be populated with probe annotation (gene names, chromosome location etc.).
+
+The row names of the `phenoData` must match the column names of the expression matrix, while the row names of the expression matrix much match the row names of the `featureData`. All these names can be accessed simultenously using `sampleNames()`.
+
+## Importing sample information
+
+The `samples_data.csv` file in the project directory contains descritptive features for each sample. Import the file into an obeject called `sample_data` and specify what kind of data each of its column contains. 
+
+```{r import_anno}
+sample_data <- read_csv(
+  "sample_data.csv", 
+  col_types = cols(
+    age = col_integer(), 
+    day = col_factor(levels = c("1", "2", "3", "4", "5", "6")), 
+    generation = col_factor(levels = c("F-1", "F0 + F1", "F2", "F3")), 
+    module = col_factor(levels = c("1", "2", "3", "4")), 
+    number = col_integer(), 
+    replicate = col_factor(levels = c("L3", "L4", "L5", "L7", "L8", "L9", "L10")), 
+    sex = col_factor(levels = c("female", "male")), 
+    stored = col_date(format = "%m/%d/%Y"), 
+    wash = col_factor(levels = c("1", "2", "3", "4")),
+    genotype = col_factor(levels = c(
+      "control",  "test", "w1118", "rpr/cyo; dilp3/ser", "cyo/+; ser/+", "rpr/+; dilp3/+", "cyo/+; dilp3/+", "rpr/+; ser/+"))))
+```
+
+Use `sample_data` to populate the `phenoData` data frame inside the Affybatch object (accessed using `pData()` but set using `phenoData()`). 
+
+```{r assign_anno}
+phenoData(raw_data) <- AnnotatedDataFrame(sample_data)
+```
+
+## Cleaning the sample names
+
+The `ReadAffy()` function uses the full names of the files it imports (including the string '_(Drosophila_2).CEL') as the default input for `sampleNames()`. However, a few of the .CEL files had erroneous names:
+1. The registartion process for four of the chips on the AGCC portal did not complete. 
+Therefore, the files for these four chips were named with their serial number (the number stating with the symbol @).
+2. Two chips were registered under the same name by mistake. 
+The file named 2y (created on June 17) is for chip 4y, while the file named real_2y (created on June 24) is    the real 2y.
+3. The name of one of the files was not suffixed correctly: it was named 12.1 instead of n12.1
+4. Finally, the names of the reminaing files were capitalized inconsistenetly.
+
+The corrected and cleaned up sample names (without the string '_(Drosophila_2).CEL') are present in the `label` column of the file `samples_data.csv` imported earlier. Use `sampleNames()` to access and replace the default sample names. 
+
+```{r rename_sample}
+sampleNames(raw_data) <- sample_data$label
+```
+
+Finally, we perform multiple checks to ensure that the names were assigned in the proper sequence. As sateted already, for an Affybatch object to be valid, the row names of its `phenoData` must match the column names of its expression matrix, while the row names of the expression matrix much match the row names of its `featureData`.
+
+```{r check_object}
+
+all(colnames(exprs(raw_data)) == rownames(pData(raw_data)))
+
+all(colnames(exprs(raw_data)) == sampleNames(raw_data))
+
+all(rownames(pData(raw_data)) == sampleNames(raw_data))
+
+all(rownames(exprs(raw_data)) %>% head() == rownames(fData(raw_data)) %>% head())
+
+# one-line check
+validObject(raw_data)
+```
+
+# Quality control of raw data
+
+## Histograms or density plots
+
+It's necessary to visualize the data before and after each processing step.
+To display and contrast the distribution of expression values of multiple arrays on the same plot use `plotDensities()` from the `limma` package. 
+Later, this function can be especially helpful to observe the effects of between-array quantile normalization, as mentioned in the package documentation.
+
+```{r raw_intensities eval = FALSE}
+raw_expression <- exprs(raw_data) %>% #plotDensities() accepts only matrix/ExpressionSet objects
+                  log2() #the data is log2 scaled to linearize it across different orders of magnitude 
+
+plotDensities(raw_expression, group = pData(raw_data)$sex, legend = "topright",
+              main = "Variation in expression according to sex (raw data)")
+
+plotDensities(raw_expression, group = pData(raw_data)$day, legend = "topright",
+              main = "Variation in expression according to batch (raw data)")
+
+plotDensities(raw_expression, group = pData(raw_data)$genotype, legend = "topright",
+              main = "Variation in expression according to genotype (raw data)")
+
+plotDensities(raw_expression, group = pData(raw_data)$replicate, legend = "topright",
+              main = "Variation in expression according to replicate (raw data)")
+
+plotDensities(raw_expression, group = pData(raw_data)$generation, legend = "topright",
+              main = "Variation in expression according to generation (raw data)")
+
+#filter and plot only probes with intensities above 6 units:
+keep <- rowMeans(raw_expression) > 6
+raw_expression2 <- (raw_expression)[keep, ]
+plotDensities(raw_expression2, group = pData(raw_data)$generation, legend = "topright",
+              main = "Variation in expression according to generation (raw data2)")
+```
+
+When data is labeled by sex, no difference is observed between the distirbutions of male and female samples (both males and females show the high-peaked and low-peaked distributions). 
+This suggests that their data are comparable and do not need to be analyzed separately within each sex in the subsequent steps.
+When the data is labeled by generation, the peaks of the distirbutions of the following two groups are shifted with respect to each other: (a) F-1 & F0 + F1 generations and (b) F2 & F3 generations. 
+Further, fewer of the probes from group (a) reach expression intensities above 7 as compared to group (b). 
+This contarst between the two groups of distributions becomes apparent if only probes with intensities above 6 units are plotted.
+Therefore, arrays from all the generations need to be quatile normalized together during pre-processing so that their distributions assume the same shape. 
+
+## The arrayQualityMetrics package
+The author's of the package wrote an [Introduction to it](http://bioconductor.org/packages/release/bioc/vignettes/arrayQualityMetrics/inst/doc/arrayQualityMetrics.pdf).
+It states the follwoing regrding the use cases for the package.
+>  The aim of the `arrayQualityMetrics` package is to produce information that is relevant for your decision making - not, to make the decision. It will often be applied to two,somewhat distinct, use cases: (i) assessing quality of a “raw” dataset, in order toget feedback on the experimental procedures that produced the data; (ii) assessing quality of a normalised dataset, in order to decide whether and how to use the dataset (or subsets of arrays in it) for subsequent data analysis.
+
+As stated in the excerpt, it is used for assesing the quality of the pre-processed arrays below.
+
+```{r eval = FALSE}
+require(svglite)
+arrayQualityMetrics(expressionset = raw_data[1:4, 1:4], # this can be an AffyBacth object
+                    outdir = "Report_for_raw_data", # directory for saving the output file 'index.html'
+                    force = TRUE, #overwrite existing files of output directory
+                    do.logtransform = TRUE, # log transform the raw ntensities
+                    intgroup = "generation" # the name of the covariate(s) used to colour the plots
+                    )  
+```
+
+## Calculate quality measures in affy 
+[Wiki here](https://wiki.bits.vib.be/index.php/Analyze_your_own_microarray_data_in_R/Bioconductor#Calculate_quality_measures_in_affy).
+
+```{r eval = FALSE}
+qc(raw_data)
+```
+
+## Boxplots
+
+## MA plots
+
+# Pre-processing
+
+## Background-correction, summarization, and normalization
+
+In total, three three pre-processing steps need to be performed:
+1. Background correction: performed separately for each chip to correct for optical noise and non-specific binding of probes.
+2. Quantile normalization: performed on all arrays together to correct for their individual biases, thus make their distributions the same.
+3. Summarization: it combines intensity values from all the probes for a single gene into get a single value.
+
+To perform pre-processing steps, use one of the following four functions (their respective packages are indicated before the double column "::"): [1](https://bioconductor.org/packages/release/bioc/manuals/affy/man/affy.pdf), [2](https://support.bioconductor.org/p/18840/#18857) [3](https://bioconductor.org/packages/release/bioc/vignettes/gcrma/inst/doc/gcrma2.0.pdf)
+1. `affy::justRMA()` this function reads CEL files & computes expression values without using an AffyBatch object.
+2. `affy::expresso()` the arguments for background correction, normalization and summarization for this function have to be set manually.
+3. `affy::rma()` this function corrects the background of each chip, performs qunatile-normalization, and summarizes all the probe in a set by robust multi-array (RMA) median polishing.   
+It also transforms the expression values to a log2 scale.
+4. `gcrma::gcrma()` this function performs background correction by combining the sequence information of each probe (to estimate its non-specific binding) with the information about the noise background of a chip derived by RMA.
+The background-corrected probe intensities are quantile-normalized and summarized using the same algorithms as the ones underlying `affy::rma()`. Hence, the initials in its name (GeneChip RMA).
+
+
+The data were pre-processed separately by `affy::rma()` and `gcrma::gcrma()` and then their respective outputs were plotted for evaluation.
+
+```{r eval = FALSE}
+# Optional: remove generations "F-1" and "F0 + F1" before pre-processing
+keep <- which(pData(raw_data)$generation != "F-1")
+
+raw_data <- raw_data[ , keep] #ExpressionSet objects cannot be subset with filter() or filter()  
+
+# drop empty levels
+pData(raw_data)$generation <- pData(raw_data)$generation %>% droplevels()
+
+# subsetting an AffyBatch object removes row names so they need be reassigned
+sampleNames(raw_data) <- pData(raw_data)$label
+
+# steps for generating the spreadsheets to be submitted to GEO
+# STep 1: Metadaa generation
+# Metadata <- sample_data %>%
+#   rename(lot = replicate, batch = day) %>% # rename the colns lot to replicate and batch to day
+#   mutate(
+#     replicate = case_when( # assign replicates numbers from 1-4 to different lots
+#       lot == "L5" | lot == "L4" ~ "rep1",
+#       lot == "L9" | lot == "L8" ~ "rep2",
+#       lot == "L10"              ~ "rep3",
+#       TRUE                      ~ "rep4") %>% as_factor(),
+#     lineage = case_when( # categorize genotypes into test or control lineages
+#       genotype == "rpr/cyo; dilp3/ser" ~ "test",
+#       genotype == "rpr/+; dilp3/+" ~ "test",
+#       genotype == "cyo/+; dilp3/+" ~ "test",
+#       genotype == "rpr/+; ser/+" ~ "test",
+#       genotype == "cyo/+; ser/+" ~ "test",
+#       genotype == "test" ~ "test",
+#       TRUE ~ "control") %>% as_factor(),
+#     genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+#       genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+#       genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+#       genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+#       genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+#       genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+#       TRUE    ~ "w1118") %>% as_factor(),
+#     generation = case_when( # convert all non-transgenic lineages into w1118 genotype
+#       generation == "F0 + F1" & genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+#       generation == "F2" ~ "F2",
+#       generation == "F3" ~ "F3",
+#       TRUE ~ "F1") %>% as_factor(),
+#     description = case_when( # broad descriptions that cannot be easily dissected into the other fields.
+#       genotype == "rpr/cyo; dilp3/ser" ~ "Gene expression data from flies carrying both the constructs required to ablate insulin-producing cells with balancers",
+#       genotype == "rpr/+; dilp3/+"     ~ "Gene expression data from flies carrying both the constructs required to ablate insulin-producing cells without balancers",
+#       genotype == "cyo/+; dilp3/+" ~ "Gene expression data from flies missing one of the constructs required to ablate insulin-producing cells",
+#       genotype == "rpr/+; ser/+" ~ "Gene expression data from flies missing one of the constructs required to ablate insulin-producing cells",
+#       genotype == "cyo/+; ser/+" ~ "Gene expression data from flies carrying only balancer chromosomes",
+#       genotype == "w1118" ~ "Gene expression data from w1118 flies free of all transgenic constructs"),
+#     source_name = case_when( # Briefly identify the biological material and the experimental variable(s),
+#       genotype == "rpr/cyo; dilp3/ser" & generation == "F0" ~ "F0 founder of the test lineage raised concurrently with the F1 test and F1 control",
+#       genotype == "rpr/+; dilp3/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "cyo/+; dilp3/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "rpr/+; ser/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "cyo/+; ser/+" & generation == "F1" ~ "F1 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F1" ~ "F1 descendant of the control lineage; serves as control for both F0 test and F1 test",
+#       genotype == "w1118" & generation == "F2" & lineage == "test" ~ "F2 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F2" & lineage == "control" ~ "F2 descendant of the control lineage",
+#       genotype == "w1118" & generation == "F3" & lineage == "test" ~ "F3 descendant of the test lineage",
+#       genotype == "w1118" & generation == "F3" & lineage == "control" ~ "F3 descendant of the control lineage")
+#     ) %>% select(label, file_name, batch, sex, generation, genotype, lineage, replicate, description, source_name)
+
+# library(XLConnect)
+# for_geo <- loadWorkbook("for_geo.xlsx", create = TRUE)
+# createSheet(for_geo, "Metadata")
+# writeWorksheet(for_geo, Metadata, "Metadata")
+# saveWorkbook(for_geo, "for_geo.xlsx")
+
+# Step 2: Matrix generation
+# write.csv(exprs(eset), "Matrix.csv")
+```
+
+```{r gcrma}
+eset <- gcrma(raw_data)
+eset2 <- rma(raw_data)
+
+# # effect of gcrma
+# plotDensities(exprs(eset) %>% log2(), 
+#               group = pData(raw_data)$generation, legend = "topright",
+#               main = "Variation in expression according to generation (raw data)")
+```
+
+The ExpressionSet obejects were filtered to remove genes with low expression and then the expression densities were plotted.
+
+```{r gcrma_intesities eval=FALSE}
+eset_list <- list()
+eset2_list <- list()
+
+for (i in seq_along (1:15)) {
+  keep <- rowMeans(exprs(eset)) > i
+  eset_list[[i]] <- eset[keep, ] #ExpressionSet objects cannot be subset with filter() or filter()
+  plotDensities(eset_list[[i]], group = pData(eset_list[[i]])$generation, legend = "topright",
+                 main = str_glue("GCRMA normalized probes with intensities > {i}"))
+  }
+
+
+for (i in seq_along (1:15)) {
+  keep <- rowMeans(exprs(eset2)) > i
+  eset2_list[[i]] <- eset2[keep, ] #ExpressionSet objects cannot be subset with filter() or filter()
+  plotDensities(eset2_list[[i]], group = pData(eset2_list[[i]])$generation, legend = "topright",
+                main = str_glue("RMA normalized probes with intensities > {i}"))
+  }
+
+# convert above `for` loops into map functions
+```
+
+`gcrma::gcrma()` generated more normally-shaped distributions than `affy::rma()`.
+
+## Post-proecssing arrayQualityMetrics
+To compare the effects of the rma() versus gcrma(), and to decide if any outlier arrays need to be excluded from subsequent analysis, run `arrayQualityMetrics()`. 
+The use cases of its package were already discussed in a previous section  [The arrayQualityMetrics package].
+
+```{r eval = FALSE}
+require(svglite)
+arrayQualityMetrics(expressionset = raw_data[1:4, 1:4], # an ExpressionSet object generated by pre-processing
+                    outdir = "Report_for_preprocessed_data", # directory for saving the output file 
+                    force = TRUE, #overwrite existing files of output directory
+                    do.logtransform = FALSE, # the default value since data is already on log scale
+                    intgroup = "generation" # the name of the covariate(s) used to colour the plots
+                    )  
+```
+
+
+## Discovering technical variation
+
+To diagnose sources of technical variation, such as batch effects, make an MDS (Multidimensional Scaling) plot of the data. 
+MDS abstracts out the largest sources of variation and uses them as automatic axes for a plot. 
+The identity of the automatic axes is discovered by checking if they correlate with covariate labels, such as batch number. 
+
+Label the samples according to the following covariates and check if they fall into separate clusters:
+1. sex
+2. batch (date of processing)
+3. genotype
+4. generation (F-1, F0 + F1, F2, or F3)
+5. replicate (lot for three-generation descent)
+
+```{r mds_whole eval = FALSE}
+plotMDS(eset, labels = pData(eset)$sex, gene.selection = "common",
+        main = "Variation in expression according to sex (whole data)")
+
+plotMDS(eset, labels = pData(eset)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (whole data)")
+
+plotMDS(eset, labels = pData(eset)$genotype, gene.selection = "common",
+        main = "Variation in expression according to genotype (whole data)")
+
+plotMDS(eset, labels = pData(eset)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (whole data)")
+
+plotMDS(eset, labels = pData(eset)$replicate, gene.selection = "common",
+        main = "Variation in expression according to replicate (whole data)")
+```
+
+The samples cluster by sex across 'Principal Component 1'.
+Therefore, sex is the biggest source of variation in expression.
+
+The samples were subset to remove the variation due to sex and the MDS plots were re-made with the remaining covariates.
+ 
+```{r mds_female eval = FALSE}
+sample_names_f <- which(pData(eset)$sex == "female")
+
+eset_f <- eset[ , sample_names_f] #ExpressionSet objects cannot be subset with filter() or filter()
+
+plotMDS(eset_f, labels = pData(eset_f)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (only female data)")
+
+plotMDS(eset_f, labels = pData(eset_f)$genotype, gene.selection = "common",
+        main = "Variation in expression according to genotype (only female data)")
+
+plotMDS(eset_f, labels = pData(eset_f)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (only female data)")
+
+plotMDS(eset_f, labels = pData(eset_f)$replicate, gene.selection = "common",
+        main = "Variation in expression according to replicate (only female data)")
+
+#####
+# keep_not <-  which(pData(eset_f)$replicate == "L9" & pData(eset_f)$generation == "F2")
+# 
+# eset_f2 <- eset_f[ , -keep_not] #ExpressionSet objects cannot be subset with filter() or filter()
+# 
+# plotMDS(eset_f2, labels = pData(eset_f2)$generation, gene.selection = "common",
+#         main = "Variation in expression according to generation (only female data2)")
+# 
+# plotMDS(eset_f2, labels = pData(eset_f2)$genotype, gene.selection = "common",
+#         main = "Variation in expression according to genotype (only female data2)")
+# 
+# plotMDS(eset_f2, labels = pData(eset_f2)$day, gene.selection = "common",
+#         main = "Variation in expression according to batch (only female data2)")
+# 
+#  plotMDS(eset_f2, labels = pData(eset_f2)$replicate, gene.selection = "common",
+#          main = "Variation in expression according to replicate (only female data2)")
+```
+
+The samples fall into two clusters across 'Principal Component 1': cluster (a) consisting of samples from generations F-1 and F0 + F1 or cluster (b) consisting of samples from generations F2 & F3.
+To observe clustering across 'Principal Component 2' focus on only the left- or right-half of the plot at a time. 
+On observing thus, the samples cluster loosely according to the replicate/batch across. 
+The loose clustering becomes clearer if outliers from replicate L9 are removed (plot not shown; corresponding lines of code commented out).
+
+
+The above pattern repeats with the male samples, the only difference being that 'Principal Component 2' is slightly shorter than observed for females.
+
+```{r mds_male eval = FALSE}
+sample_names_m <- which(pData(eset)$sex == "male")
+
+eset_m <- eset[ , sample_names_m] #ExpressionSet objects cannot be subset with filter() or filter()
+
+plotMDS(eset_m, labels = pData(eset_m)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (only male data)")
+
+plotMDS(eset_m, labels = pData(eset_m)$genotype, gene.selection = "common",
+        main = "Variation in expression according to genotype (only male data)")
+
+plotMDS(eset_m, labels = pData(eset_m)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (only male data)")
+
+ plotMDS(eset_m, labels = pData(eset_m)$replicate, gene.selection = "common",
+         main = "Variation in expression according to replicate (only male data)")
+ 
+ #####
+ 
+#  keep_not <- which(
+#                           pData(eset_m)$replicate == "L9" & 
+#                           pData(eset_m)$generation == "F2"
+#                           )
+# 
+# eset_m2 <- eset_m[ , -keep_not] #ExpressionSet objects cannot be subset with subset()/filter()
+# 
+# plotMDS(eset_m2, labels = pData(eset_m2)$generation, gene.selection = "common",
+#         main = "Variation in expression according to generation (only male data2)")
+# 
+# plotMDS(eset_m2, labels = pData(eset_m2)$genotype, gene.selection = "common",
+#         main = "Variation in expression according to genotype (only male data2)")
+# 
+# plotMDS(eset_m2, labels = pData(eset_m2)$day, gene.selection = "common",
+#         main = "Variation in expression according to batch (only male data2)")
+#
+#  plotMDS(eset_m2, labels = pData(eset_m2)$replicate, gene.selection = "common",
+#          main = "Variation in expression according to replicate (only male data2)")
+```
+
+To prove that the variation between the clusters across 'Principal Component 1' is not biological but technical, subset and plot just the wild-type samples from all the generations, thereby removing the scope for biological variation.
+
+```{r mds_wt eval = FALSE}
+f_wt <- which(pData(eset)$sex      == "female"& ( 
+              pData(eset)$genotype == "control" | 
+              pData(eset)$genotype == "w1118"   | 
+              pData(eset)$genotype == "test"    )
+              )
+eset_f_wt <- eset[ , f_wt] #ExpressionSet objects cannot be subset with filter() or filter()
+
+plotMDS(eset_f_wt, labels = pData(eset_f_wt)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (only female wt data)")
+
+plotMDS(eset_f_wt, labels = pData(eset_f_wt)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (only female wt data)")
+
+plotMDS(eset_f_wt, labels = pData(eset_f_wt)$replicate, gene.selection = "common",
+        main = "Variation in expression according to replicate (only female wt data)")
+
+#####
+
+m_wt <- which(pData(eset)$sex      == "male" &
+              (pData(eset)$genotype == "test" |
+                pData(eset)$genotype == "control")
+                )
+              
+
+eset_m_wt <- eset[ , m_wt] #ExpressionSet objects cannot be subset with filter() or filter()
+
+plotMDS(eset_m_wt, labels = pData(eset_m_wt)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (only male wt data)")
+
+plotMDS(eset_m_wt, labels = pData(eset_m_wt)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (only male wt data)")
+
+plotMDS(eset_m_wt, labels = pData(eset_m_wt)$replicate, gene.selection = "common",
+        main = "Variation in expression according to replicate (only male wt data)")
+```
+
+Just the  wild-type samples too fall into two clusters across 'Principal Component 1': cluster (a) consisting of samples from generations F-1 and F0 + F1 or cluster (b) consisting of samples from generations F2 & F3.
+
+```{r}
+
+######
+
+exp_raw <- log2(Biobase::exprs(eset))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    # Phenotype = pData(eset)$Factor.Value.phenotype.,
+                    # Individual = pData(eset)$Characteristics.individual.
+                    sex = pData(eset)$sex
+                    )
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = sex, colour = sex)) +
+  ggtitle("Most of the variation is due to sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sd_ratio) +
+  scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+
+######
+
+exp_raw <- log2(Biobase::exprs(eset_m))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    generation = pData(eset_m)$generation,
+                    genotype = pData(eset_m)$genotype,
+                    replicate = pData(eset_m)$replicate,
+                    Batch = pData(eset_m)$day
+                    )
+
+dataGG <- dataGG %>%
+  mutate(
+    Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+      replicate == "L5" | replicate == "L4" ~ "rep1",
+      replicate == "L9" | replicate == "L8" ~ "rep2",
+      replicate == "L10"              ~ "rep3",
+      TRUE                      ~ "rep4") %>% as_factor(),
+    Lineage = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      genotype == "rpr/+; dilp3/+" ~ "test",
+      genotype == "cyo/+; dilp3/+" ~ "test",
+      genotype == "rpr/+; ser/+" ~ "test",
+      genotype == "cyo/+; ser/+" ~ "test",
+      genotype == "test" ~ "test",
+      TRUE ~ "control") %>% as_factor(),
+    Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+      genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+      genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+      genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+      TRUE    ~ "w1118") %>% as_factor(),
+    Generation = case_when( # convert all non-transgenic lineages into w1118 genotype
+      generation == "F0 + F1" & genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor())
+
+# dataGG$Generation <- factor(dataGG$Generation, levels=c("F0", "F1", "F2", "F3"))
+
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = Generation, colour = Generation)) +
+  ggtitle("Most of the variation is due to generation, after removing sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sd_ratio) +
+  # scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+
+######
+
+exp_raw <- log2(Biobase::exprs(eset_m_wt))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    generation = pData(eset_m_wt)$generation,
+                    genotype = pData(eset_m_wt)$genotype,
+                    replicate = pData(eset_m_wt)$replicate,
+                    Batch = pData(eset_m_wt)$day
+                    )
+
+dataGG <- dataGG %>%
+  mutate(
+    Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+      replicate == "L5" | replicate == "L4" ~ "rep1",
+      replicate == "L9" | replicate == "L8" ~ "rep2",
+      replicate == "L10"              ~ "rep3",
+      TRUE                      ~ "rep4") %>% as_factor(),
+    Lineage = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      genotype == "rpr/+; dilp3/+" ~ "test",
+      genotype == "cyo/+; dilp3/+" ~ "test",
+      genotype == "rpr/+; ser/+" ~ "test",
+      genotype == "cyo/+; ser/+" ~ "test",
+      genotype == "test" ~ "test",
+      TRUE ~ "control") %>% as_factor(),
+    Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+      genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+      genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+      genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+      TRUE    ~ "w1118") %>% as_factor(),
+    Generation = case_when( # convert all non-transgenic lineages into w1118 genotype
+      generation == "F0 + F1" & genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor())
+
+
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = Lineage, colour = Lineage)) +
+  ggtitle("Most of the variation is due to generation, after removing sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sd_ratio) +
+  # scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+```
+
+```{r}
+palmieri_eset <- rma(raw_data, target = "core", normalize = FALSE)
+
+row_medians_assayData <- 
+  Biobase::rowMedians(as.matrix(Biobase::exprs(palmieri_eset)))
+
+RLE_data <- sweep(Biobase::exprs(palmieri_eset), 1, row_medians_assayData)
+
+RLE_data <- as.data.frame(RLE_data)
+RLE_data_gathered <- 
+  tidyr::gather(RLE_data, patient_array, log2_expression_deviation)
+
+ggplot2::ggplot(RLE_data_gathered, aes(patient_array,
+                                       log2_expression_deviation)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  ylim(c(-2, 2)) + 
+  theme(axis.text.x = element_text(colour = "aquamarine4", 
+                                  angle = 60, size = 6.5, hjust = 1 ,
+                                  face = "bold"))
+```
+
+
+```{r}
+# phenotype_names <- ifelse(str_detect(pData
+#                                     (palmieri_eset_norm)$Factor.Value.phenotype.,
+#                              "non"), "non_infl.", "infl.")
+# 
+# disease_names <- ifelse(str_detect(pData
+#                                     (palmieri_eset_norm)$Factor.Value.disease.,
+#                              "Crohn"), "CD", "UC")
+
+annotation_for_heatmap <- 
+  data.frame(
+    # sex = pData(eset)$sex
+    # batch = pData(eset)$replicate,
+    generation = pData(eset_m)$generation,
+    genotype = pData(eset_m)$genotype
+             )
+
+annotation_for_heatmap <- annotation_for_heatmap %>%
+  mutate(
+    # Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+    #   replicate == "L5" | replicate == "L4" ~ "rep1",
+    #   replicate == "L9" | replicate == "L8" ~ "rep2",
+    #   replicate == "L10"              ~ "rep3",
+    #   TRUE                      ~ "rep4") %>% as_factor(),
+    # Lineage = case_when( # categorize genotypes into test or control lineages
+    #   genotype == "rpr/cyo; dilp3/ser" ~ "test",
+    #   genotype == "rpr/+; dilp3/+" ~ "test",
+    #   genotype == "cyo/+; dilp3/+" ~ "test",
+    #   genotype == "rpr/+; ser/+" ~ "test",
+    #   genotype == "cyo/+; ser/+" ~ "test",
+    #   genotype == "test" ~ "test",
+    #   TRUE ~ "control") %>% as_factor(),
+    # Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+    #   genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+    #   genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+    #   genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+    #   genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+    #   genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+    #   TRUE    ~ "w1118") %>% as_factor()
+    generation = case_when( # convert all non-transgenic lineages into w1118 genotype
+      generation == "F0 + F1" & genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor()
+    )
+
+annotation_for_heatmap$genotype <- NULL
+
+
+row.names(annotation_for_heatmap) <- pData(eset_m)$label
+```
+
+```{r}
+exp_palmieri <- Biobase::exprs(eset_m)
+dists <- as.matrix(dist(t(exp_palmieri), method = "manhattan"))
+
+rownames(dists) <- pData(eset_m)$label
+hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(9, "YlOrRd"))(255))
+colnames(dists) <- NULL
+diag(dists) <- NA
+
+ann_colors <- list(
+# lineage = c("test" = "#00BFC4","control" = "#F8766D")
+  # sex = c("male" = "#00BFC4","female" = "#F8766D")
+  generation = c( "F0" = "#F8766D", "F1" = "#7CAE00", "F2" = "#00BFC4", "F3" = "#C77CFF")
+  # genotype = c("control" = "red", "test" = "#FFBF00","w1118" = "#80FF00", "rpr/cyo; dilp3/ser" = "#00FF40", "cyo/+; ser/+" = "cyan", "rpr/+; dilp3/+" = "#0040FF", "cyo/+; dilp3/+" = "#8000FF", "rpr/+; ser/+" = "#FF00BF")
+  # genotype = c(
+  #   "control" = "red", 
+  #   "test" = "yellow",
+  #   "w1118" = "green", 
+  #   "rpr/cyo; dilp3/ser" = "cyan", 
+  #   "cyo/+; ser/+" = "blue", 
+  #   "rpr/+; dilp3/+" = "magenta")
+  )
+
+pheatmap(dists, col = (hmcol), 
+         annotation_row = annotation_for_heatmap,
+         annotation_colors = ann_colors,
+         legend = TRUE, 
+         treeheight_row = 0,
+         legend_breaks = c(min(dists, na.rm = TRUE), 
+                         max(dists, na.rm = TRUE)), 
+         legend_labels = (c("small distance", "large distance")),
+         # main = "Clustering heatmap"
+         )
+```
+
+
+# Senstivity analysis of methods dealing with technical variation
+Three different methods can deal with technical variation:
+
+**1. Use of the `arrayWeights()` function to apply weights to arrays according to their quality**
+
+Compare `arrayWeights()` and/or `duplicateCorrelation()`, and plain limma.
+
+[Reference on advantage of using the var.design argument within `arrayWeights()`](https://support.bioconductor.org/p/73115/).
+
+[Reference for simultaneously using `duplicateCorrelation()`](https://support.bioconductor.org/p/73527/).
+
+**2. Use of `lme4`, or `limma::duplicateCorrelation()` to treat a technical variable as a random effects variable**
+
+Compare `lme4`, `duplicateCorrelation()`, and plain limma.
+
+The `duplicateCorrelation()` function uses `mixedModel2Fit` from the `statmod` package, which is explcitly a function for building mixed models.
+
+[Refer section 9.7 of limma user guide for usage of the duplicateCorrelation() function](https://bioconductor.org/packages/3.9/bioc/vignettes/limma/inst/doc/usersguide.pdf).
+
+**3. Changing the values within array by using `removeBatchEffect()` or the package `ComBat`**
+
+Compare `removeBatchEffect()`, `ComBat`, and plain limma
+
+[Tutorial on using SVA and ComBat in R](https://www.coursera.org/learn/statistical-genomics/lecture/zsDd4/batch-effects-in-r-part-a-8-18).			
+
+A caveat: for the actual statistical analysis, it is better to include the batch variable as a coefficient when constructing your design matrix. 
+Using `removeBatchEffects()` is ideal for exploratory data analysis, especially visualizations.
+Accordingly, use it for making the following two plots to check if the signal-to-noise ratio improves:
+An MDS plots, of the samples labeled by their batches to check if their effect has been removed.
+An MDS plots, of the samples labeled by their treatment to check if its effect has been enhanced.
+
+```{r batch_effect_correction eval = FALSE}
+eset2 <- removeBatchEffect(eset, batch = pData(eset)$day)
+
+plotMDS(eset2, labels = pData(eset)$sex, gene.selection = "common",
+        main = "Variation in expression according to sex (batch-corrected data)")
+
+plotMDS(eset2, labels = pData(eset)$day, gene.selection = "common",
+        main = "Variation in expression according to batch (batch-corrected data)")
+
+plotMDS(eset2, labels = pData(eset)$genotype, gene.selection = "common",
+        main = "Variation in expression according to genotype (batch-corrected data)")
+
+plotMDS(eset2, labels = pData(eset)$generation, gene.selection = "common",
+        main = "Variation in expression according to generation (batch-corrected data)")
+
+plotMDS(eset2, labels = pData(eset)$replicate, gene.selection = "common",
+        main = "Variation in expression according to replicate (batch-corrected data)")
+
+```
+
+# Background
+
+**Selecting the correct statistical test**
+
+The x-axis variable (generation) is categorical, whereas the y-axis variable (the expression of a *single* gene) is continuous . Therefore techniques that require both variables to be continuous like correlation, Pearson's correlation, and Spearman's rank correlation cannot be used. 
+Although Spearman's Rho does work with ordinal x-axis variables, the relationship between y and x variables has to be monotonic, which is an assumption that too is probably violated. Thus, only repeated-measures ANOVA or linear regression can be used.
+
+Once a list of DE genes has been generated, a test of proportion can identify if a GO category is over-represented on the list. The test of proportion can either be one based on a single predictor, like Fisher's exact test, or one based on multiple predictors, like GLMMs (eg a condtional, repeated-measures logistic regression). An advantage of Fisher's exact test is that it can be applied to sparse data (data where any cell has <5 values) but it does not take the correaltion structure into account. A GLMM does take the correlated structure into account, but it might not be applicable to sparse data. [More on runing models for repeated measures data that isn’t continuous.](https://www.theanalysisfactor.com/models-repeated-measures-continuous-categorical-count-data/)
+
+#### 
+**Defining all the hypotheses**
+Ignore this sub-section, if you are already familiar with the definitions of main effects, simple effects, and interactions
+
+Assume that there are two independent factors A and B, each with two levels 1 and 2. Two observations would be present at each level of a factor (eg A1B1 & A1B2 for factor A). Then, the following definitions would be applicable:
+
+1. The main effect of a factor is the difference in the means of the two levels of that factor. Thus, 
+*main effect of A can be written as `mean(A1B1 + A1B2) - mean(A2B1 + A2B2)` or as `mean(A1) - mean(A2)`
+*main effect of B can be written as `mean(B1A1 + B1A2) - mean(B2A1 + B2A2)` or as `mean(B1) - mean(B2)`
+*null hypothesis for the main effect of A would be `mean(A1) - mean(A2) = 0` 
+*null hypothesis for the main effect of B would be `mean(B1) - mean(B2) = 0` 
+
+2. The simple effect of a factor is the difference in the two levels of that factor at a fixed level of the other factor. Thus,
+*simple effect of A at level 1 of B is `A1B1 - A2B1`
+*simple effect of A at level 2 of B is `A1B2 - A2B2`
+*simple effect of B at level 1 of A is `B1A1 - B2A1`
+*simple effect of B at level 2 of A is `B1A2 - B2A2`
+*null hypothesis for level 1 effects would be that the simple effects of either factor at level 1 are equal or `mean(A1) - mean(B1) = 0` 
+*null hypothesis for level 2 effects would be that the simple effects of either factor at level 2 are equal or `mean(A2) - mean(B2) = 0` 
+
+3. An interaction means that the main effect of a factor changes on moving along the levels of the other factor. Thus,
+*[an interaction implies that the simple effects differ](https://www.theanalysisfactor.com/interpreting-interactions-when-the-f-test-and-the-simple-effects-disagree/) so `mean(A1) - mean(B1)` ≠ `mean(A2) - mean(B2)`
+*the null hypothesis for the interaction would be `mean(A1) - mean(B1) = mean(A2) - mean(B2)` 
+####
+
+**Formulating the hypotheses for the present study**
+The preceding definitions get translated into the following hypotheses in case of the present study:
+
+1. Is there an interaction between genotype and generation? 
+*Visual test: do the lines across the generations diverge for the two genotypes or are they parallel?
+*contrats for statistical test: difference between the two genotypes at generation 1 is equal to the difference between the two genotypes at generation 2 is equal to the difference between the two genotypes at generation 3. Equivalently, simple effect of generation (calculated from either gener1-gener2 or gener2-gener3) differs for the two genotypes.
+~~mean(g2c + g2t) - mean(g2c + g3c) = mean(g3c + g3t) - mean(g2t + g3t)~~
+Update: g1t-g1c = g2t-g2c; g2t-g2c = g3t-g3c. Equivalently g3t-g2t = g3c-g2c; g2t-g1t = g2c-g1c
+
+2. Is there a main effect of generation?
+*Visual test: is the slope of the line connecting any two consecutive generations different from zero, after merging control and test groups?
+*contrats for statistical test: (g1t+g1c)/2 = (g2t+g2c)/2 = (g3t+g3c)/2
+
+3. Is there a main effect of group?
+*Visual test: do the test and control genotype lines differ from each other? 
+*contrats for statistical test: average(expression in all generations of test) minus average (expression in all generations of control) is significant for many genes
+(F0.test+F1.test+F2.test+F3.test)/4 - (F0.control+F1.control+F2.control+F3.control)/4 is significant for many genes?
+Note: an equal number of replicates are not needed for all the generations, even generations with single replciates can be included in the contrast above.
+
+**Understanding the results**
+
+* The model coefficient represents the main effect of a predictor variable when an interaction term is not included in the model. 
+* In case an interaction term is included in the model formula, [the model coefficient of a predictor represents its effect at the reference level of the other predictor](https://www.theanalysisfactor.com/interpreting-lower-order-coefficients-when-the-model-contains-an-interaction/), called its simple/conditional effect. Its main effect then is given by its conditional effect plus the interaction effect.
+* Although, an insignificant interaction can be dropped from the model, [lower order terms should, whether significant or not, be retained if the intercation is significant](https://www.theanalysisfactor.com/testing-and-dropping-interaction-terms/).
+* The presence of a significant [interaction means that the main effect of a factor is not representative of the simple effects](http://glimo.vub.ac.be/downloads/simpleeffect.htm).
+* Simple effects should be tested upon discovering an interaction [to find if a predictor has an effect at each level of the second predictor or at only one of its levels](https://www.theanalysisfactor.com/interpret-main-effects-interaction/).
+* It is possible that none of the predictors show a main effect [but an interaction still exists.](https://www.theanalysisfactor.com/interactions-main-effects-not-significant/).
+* Use [marginal means to explain the test for interaction to the audience](https://www.theanalysisfactor.com/using-marginal-means-to-explain-an-interaction/]). [Second example](https://www.theanalysisfactor.com/interaction-dummy-variables-in-linear-regression/).
+* To visualize the results of the linear regression use `MArrayLM` (?)
+
+# Differential expression analysis
+## Cleaning up the data
+Subset the data and clean up the names of the factor levels
+```{r genotype_cleanup}
+#retreive remaining rownames after excluding F-1, three F0 genotypes, and males
+mini <-  which(
+  pData(eset)$generation != "F-1" & #using filter() instead of subset() does not preserve rownames
+  # pData(eset)$generation != "F0 + F1" &
+  pData(eset)$genotype   != "cyo/+; dilp3/+" & 
+  pData(eset)$genotype   != "rpr/+; ser/+" & 
+  pData(eset)$genotype   != "rpr/+; dilp3/+" &
+  # pData(eset)$genotype   != "rpr/cyo; dilp3/ser" &
+  pData(eset)$sex        != "female"
+  # pData(eset)$sex        != "male"
+                )
+#use the rownames object `mini` to perform the actual subsetting
+eset_mini <- eset[ , mini] #ExpressionSet objects cannot be subset with filter() or subset()
+remove(mini)
+
+pData(eset_mini)$sex <- pData(eset_mini)$sex %>% droplevels()
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% droplevels()
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% droplevels()
+pData(eset_mini)$day <- pData(eset_mini)$day %>% droplevels()
+
+
+#convert the `generation` column to a character vector to allow downstream processing
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.character()
+
+# #identify the rows that contain the string "dilp3", signifying the F0 generation
+# generation_F0 <- pData(eset_mini)$genotype %>%
+#   str_which("dilp3")
+#
+# #change the `generation` of the rows identified above to "F0"
+# pData(eset_mini)[generation_F0, "generation"] <- "F0"
+
+#split the `generation` "F0 + F1" into F0 and F1
+pData(eset_mini) <- pData(eset_mini) %>% 
+  mutate(generation = 
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "F0", 
+                     genotype == "cyo/+; ser/+" ~ "F1", 
+                     genotype == "w1118" ~ "F1", 
+                     generation == "F2" ~ "F2", generation == "F3" ~ "F3"), 
+         genotype =  
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "test", 
+                     genotype == "cyo/+; ser/+" ~ "test", 
+                     genotype == "w1118" ~ "control",
+                     genotype == "test" ~ "test", 
+                     genotype == "control" ~ "control")
+         )
+
+#convert the `generation` column  back to a factor vecor
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.factor()
+
+#convert the `genotype` column to a character vector to allow downstream processing
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.character()
+
+#replace the `genotype` string `w1118` with the string `control`
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("w1118", "control")
+
+#replace the other `genotype` strings not matching the string 'control' using the lookahead regex (?!__)
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("^(?!control)(.*)$", "test")
+
+#convert the `genotype` column  back to a factor vecor
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.factor()
+
+```
+
+## Model formula 1: Group-means parametrization 
+The design formulae for multi-factorial experiments can be written using any type of parametrization:  treatment-contrast, group-means, or sum-to-zero parametrization. According to the `limma` user manual (Section 9.5.4), only the names of the coeffcients in the model objects called `fit` will differ, "all components of [model objects called] `fit2` will be identical regardless of parametrization used".
+
+Build the design matrix using the group-means prametrization. To do so combine all the varaibles of interest, `sex`, `generation` and `genotype`, into a single variable called `group`. The variable `day` holds the replicates and it should automatically get averaged within each `generation`.
+```{r group_means_interaction}
+# Create single variable "group"
+group <- with(pData(eset_mini), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_mini)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_mini))
+colnames(design_1) <- levels(pData(eset_mini)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$replicate)
+corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+fit_model_1 <- lmFit(eset_mini, design_1, 
+                     block =  pData(eset_mini)$replicate, 
+                     correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_mini, design_1)
+
+#####
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+# 1. t-test for main effect of genotype; the following two formulations are algebraically equal;
+# first tests if the difference in heights of genotype lines running across generation levels is !0
+# second tests if difference(s) in heights of genotype line segments at all gen levels average to !0
+# average(f1.test + f2.test + f3.test) - average (f1.control + f.2 control + f3.control)
+# average[(f1.test - f1.control); (f2.test - f.2 control); (f3.test - f3.control)]
+
+# cm_1_genotype <- makeContrasts(
+#   t_v_c = (F1.test.female + F2.test.female + F3.test.female)/3 - 
+#           (F1.control.female + F2.control.female + F3.control.female)/3,
+#   levels = design_1)
+# 
+# cm_1_genotype 
+
+## use the following contrast if predictor in the design matrix is genotype instead of group
+# cm_1_genotype <- makeContrasts(
+#   t_v_c = test-control,
+#   levels = design_1)
+# 
+# cm_1_genotype
+
+# 2. ANOVA for simple effect of genotype; compute generation-wise genotypic differences then do ANOVA;
+# it tests if the difference(s) in heights of genotype line segments at any generation level are !0
+# it estimates the simple effect of genotype at each level of generation
+
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_1_geno <- decideTests(fit2_model_1)
+summary(results_1_geno)
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+vennDiagram(results_1_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+hist(top_1_geno_0$P.Value)
+hist(top_1_geno_1$P.Value)
+hist(top_1_geno_2$P.Value)
+hist(top_1_geno_3$P.Value)
+# qplot(top_1_geno$P.Value,
+#       geom="histogram",
+# # specify the size of the class interval
+#       binwidth = 0.05,
+# # specify if bin boundaries fall at centre or ends of class intervals
+#       boundary = 0.05) + ylim(0, 800) + 
+#   ggtitle("p-value histogram of group-means interaction model") +
+#   theme_classic()
+
+# ggplot(data = top_1, aes(x = top_1$P.Value)) +
+#   geom_histogram() +
+#   xlab("p-value") +
+#   ggtitle("p-value histogram of F2:F3 interaction", subtitle = "group-means model") +
+#   thekme_classic() +
+#   theme(plot.title = element_text(hjust = 0.5, vjust = -1),
+#         plot.subtitle = element_text(hjust = 0.5, vjust = -1))
+```
+```{r group_means_interaction_2}
+## Build the contrasts matrix for discovering main effect of generation in females
+
+# 1. ANOVA for main effect of generation; the following two formulations are algebraically equal;
+# it tests if the sums of genotype line segments are at different heights at any generation level
+# first average genotypes within a generation, repeat this for another generation, and then compute differece between the averages. This method is used below.
+# first compute the difference between two generations and then average the differences, example: gen_2v1 = (F2.test.female - F1.test.female)/2 + (F2.control.female - F1.control.female)/2
+
+cm_1_generation <- makeContrasts(
+  gen_2v1 = (F2.test.female + F2.control.female)/2 - (F1.test.female + F1.control.female)/2,
+  gen_3v1 = (F3.test.female + F3.control.female)/2 - (F1.test.female + F1.control.female)/2,
+  gen_3v2 = (F3.test.female + F3.control.female)/2 - (F2.test.female + F2.control.female)/2,
+  levels = design_1)
+
+cm_1_generation
+
+# # use the following contrast if predictor in the design matrix is generation instead of group
+# cm_1_generation <- makeContrasts(
+#   gen_2v1 = F2-F1,
+#   gen_3v1 = F3-F1,
+#   gen_3v2 = F3-F2,
+#   levels = design_1)
+# 
+# cm_1_generation 
+
+# 2. ANOVA for simple effect of generation; compute genotype-wise differences in slopes;
+# it tests if the slopes of between-generation line segments for a specific genotype are !0
+# it estimates the simple effect of generation for a specific genotype
+
+# cm_1_generation_simple_t <- makeContrasts(
+#   gen_2v1_t = (F2.test.female - F1.test.female),
+#   gen_3v1_t = (F3.test.female - F1.test.female),
+#   gen_3v2_t = (F3.test.female - F2.test.female),
+#   levels = design_1)
+#
+# cm_1_generation_simple_t
+
+cm_1_generation_simple_c <- makeContrasts(
+  gen_2v1_c = (F2.control.female - F1.control.female),
+  gen_3v1_c = (F3.control.female - F1.control.female),
+  gen_3v2_c = (F3.control.female - F2.control.female),
+  levels = design_1)
+
+cm_1_generation_simple_c
+
+#re-formulate fit2
+keep <- fit_model_1$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_generation)
+
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       )
+
+#Results of all contrasts simultaneously
+results_1_gener <- decideTests(fit2_model_1)
+summary(results_1_gener)
+
+#Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+vennDiagram(results_1_gener)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_1_gener <- topTable(fit2_model_1,
+                  # coef=c(1:2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+hist(top_1_gener$P.Value)
+
+qplot(top_1_gener$P.Value,
+      geom="histogram",
+      binwidth = 0.05,
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of group-means interaction model") +
+  theme_classic()
+
+#####
+## Build the contrasts matrix for discovering interaction in females
+
+# it tests if  differences in genotype line segments are at different heights at any generation level
+cm_1_interaction  <- makeContrasts(
+  # gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+  gen_2v1 = (F2.test.female-F1.test.female) - (F2.control.female-F1.control.female),
+  gen_3v1 = (F3.test.female-F1.test.female) - (F3.control.female-F1.control.female),
+  gen_3v2 = (F3.test.female-F2.test.female) - (F3.control.female-F2.control.female),
+  levels = design_1)
+
+cm_1_interaction 
+
+#Build the contrasts matrix for discovering interaction in males
+
+# contrast_matrix_1 <- makeContrasts(
+#   # gen_1v0 = (F1.test.male-F0.test.male) - (F1.control.male-F0.control.male),
+#   gen_2v1 = (F2.test.male-F1.test.male) - (F2.control.male-F1.control.male),
+#   gen_3v2 = (F3.test.male-F2.test.male) - (F3.control.male-F2.control.male),
+#   gen_3v1 = (F3.test.male-F1.test.male) - (F3.control.male-F1.control.male),
+#   levels = design_1)
+# contrast_matrix_1
+
+#re-formulate fit2
+keep <- fit_model_1$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_interaction)
+
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_1_inter <- decideTests(fit2_model_1)
+summary(results_1_inter)
+
+#Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+vennDiagram(results_1_inter)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_1_inter <- topTable(fit2_model_1,
+                  # coef=c(1:2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+hist(top_1_inter$P.Value)
+
+qplot(top_1_inter$P.Value,
+      geom="histogram",
+      binwidth = 0.05,
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of group-means interaction model") +
+  theme_classic()
+```
+
+## Model formula 2: full interaction 
+```{r full_interaction}
+design_2 <- model.matrix(~ genotype*generation, data = pData(eset_mini))
+
+colnames(design_2)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_2)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_2 <- duplicateCorrelation(eset_mini, design_2, block =  pData(eset_mini)$replicate)
+corfit_2$consensus
+
+#fit the linear model fit_model_2 with blocking
+fit_model_2 <- lmFit(eset_mini, design_2, block =  pData(eset_mini)$replicate, correlation = corfit_2$consensus)
+
+# #fit the linear model fit_model_2 without blocking
+# fit_model_2 <- lmFit(eset_mini, design_2)
+
+#fit the contrast matrix
+# fit2_model_2 <- contrasts.fit(fit_model_2, contrast_matrix_2)
+
+#filter out probes with an average expression level below 3
+#set trend = TRUE  since the data do not show uniform a variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+
+keep <- fit_model_2$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_2 <- fit_model_2[keep, ] 
+nrow(fit2_model_2)
+
+#build the contrast matrix
+cm_2_inter  <- bind_cols(
+  # gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+  gen_2v1 = c(0,0,0,0,1,0),
+  gen_3v1 = c(0,0,0,0,0,1),
+  gen_3v2 = c(0,0,0,0,-1,1),
+  )
+
+cm_2_interaction 
+
+#fit the contrast matrix
+fit2_model_2 <- contrasts.fit(fit2_model_2, cm_2_interaction)
+
+
+fit2_model_2 <- eBayes(fit2_model_2,
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_2_inter <- decideTests(fit2_model_2)
+summary(results_2_inter)
+
+#Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+# vennDiagram(object = results_2[ , c(5,6)], names = c("gen_2v1", "gen_3v1"))
+vennDiagram(results_2_inter)
+
+# #A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_2, adjust="BH", number = 30)
+top_2_inter <- topTable(fit2_model_2, 
+                  # coef = c(5:6), 
+                  adjust = "BH", number = nrow(fit2_model_2), sort.by = "none")
+
+hist(top_2_inter$P.Value)
+
+qplot(top_2_inter$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of nested interaction model") + 
+  theme_classic()
+```
+
+## Model formula 3: classic interaction 
+```{r classic_interaction}
+# design_3.1 <- model.matrix(~ day + genotype*generation, data = pData(eset_mini))
+# intercept column present (all groups); day1, genotype control, and generation F2 absent
+
+design_3 <- model.matrix(~ 
+                           # day + 
+                           genotype + generation, data = pData(eset_mini))
+
+colnames(design_3)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_3)
+
+#Testing the contrasts/hypotheses
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_3 <- duplicateCorrelation(eset_mini, design_3, block =  pData(eset_mini)$replicate)
+corfit_3$consensus
+
+#fit the linear model fit_model_3 with blocking
+fit_model_3 <- lmFit(eset_mini, design_3, 
+                     block =  pData(eset_mini)$replicate, 
+                     correlation = corfit_3$consensus
+                     )
+
+#####
+# Build the contrasts matrix for discovering main effect of genotype in females
+cm_3_geno  <- c(0,1,0,0)
+cm_3_geno 
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_3$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_3 <- fit_model_3[keep, ]
+nrow(fit2_model_3)
+
+#fit the contrast matrix
+fit2_model_3 <- contrasts.fit(fit2_model_3, cm_3_geno)
+
+#set trend = TRUE  since the data do not show uniform a variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` )
+fit2_model_3 <- eBayes(fit2_model_3, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_3_geno <- decideTests(fit2_model_3)
+summary(results_3_geno)
+
+# #Venn diagram showing numbers of genes significant in the last two coefficients
+# vennDiagram(object = results_3_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_3_geno <- topTable(fit2_model_3,
+                  # coef = c(2),
+                  adjust = "BH", number = nrow(fit2_model_3), sort.by = "none")
+
+hist(top_3_geno$P.Value)
+
+qplot(top_3_geno$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of additive model") +
+  theme_classic()
+
+#####
+#re-formulate fit2
+keep <- fit_model_3$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_3 <- fit_model_3[keep, ]
+nrow(fit2_model_3)
+
+#build the contrast matrix
+cm_3_gener  <- bind_cols(
+  # gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+  gen_2v1 = c(0,0,1,0),
+  gen_3v1 = c(0,0,0,1),
+  gen_3v2 = c(0,0,-1,1),
+  )
+
+cm_3_gener 
+
+#fit the contrast matrix
+fit2_model_3 <- contrasts.fit(fit2_model_3, cm_3_gener)
+
+fit2_model_3 <- eBayes(fit2_model_3, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_3_gener <- decideTests(fit2_model_3)
+summary(results_3_gener)
+
+# #Venn diagram showing numbers of genes significant in the last two coefficients
+# vennDiagram(object = results_3[ , c(3,4)], names = c("gen_2v1", "gen_3v1"))
+vennDiagram(results_3_gener)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_3_gener <- topTable(fit2_model_3,
+                  # coef = c(3:4),
+                  adjust = "BH", number = nrow(fit2_model_3), sort.by = "none")
+
+hist(top_3_gener$P.Value)
+
+qplot(top_3_gener$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of additive model") +
+  theme_classic()
+```
+
+## Model formula 4: sum to zero
+```{r sum_to_zero}
+genotype <- pData(eset_mini)$genotype
+generation <- pData(eset_mini)$generation
+contrasts(genotype) <- contr.sum(2)
+contrasts(generation) <- contr.sum(3)
+design_4 <- model.matrix(~genotype*generation)
+remove(generation, genotype)
+
+colnames(design_4)
+
+corfit_4 <- duplicateCorrelation(eset_mini, design_4, block =  pData(eset_mini)$replicate)
+corfit_4$consensus
+
+#fit the linear model fit_model_3 with blocking
+fit_model_4 <- lmFit(eset_mini, design_4, 
+                     block =  pData(eset_mini)$replicate, 
+                     correlation = corfit_4$consensus
+                     )
+
+#####
+# Build the contrasts matrix for discovering main effect of genotype in females
+cm_4_geno  <- c(0,-1,0,0,0,0)
+cm_4_geno 
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_4$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_4 <- fit_model_4[keep, ]
+nrow(fit2_model_4)
+
+#fit the contrast matrix
+fit2_model_4 <- contrasts.fit(fit2_model_4, cm_4_geno)
+
+fit2_model_4 <- eBayes(fit2_model_4, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       )
+
+#Results of all contrasts simultaneously
+results_4_geno <- decideTests(fit2_model_4)
+summary(results_4_geno)
+
+# #Venn diagram showing numbers of genes significant in the last two coefficients
+# vennDiagram(results_4_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_4_geno <- topTable(fit2_model_4,
+                  # coef = c(2),
+                  adjust = "BH", number = nrow(fit2_model_4), sort.by = "none")
+
+hist(top_4_geno$P.Value)
+
+qplot(top_4_geno$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of classic interaction model") +
+  theme_classic()
+
+#####
+# Build the contrasts matrix for discovering main effect of generation in females
+cm_4_gener  <- bind_cols(
+  # gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+  gen_2v1 = c(0,	0,	-1,	 1,	0,	0),
+  gen_3v1 = c(0,	0,	-2,	-1,	0,	0),
+  gen_3v2 = c(0,	0,	-1,	-2,	0,	0)
+  )
+
+cm_4_gener 
+
+# # use the following matrix for getting FC values within generation instead of across generation
+# cm_4_gener  <- bind_cols(
+#   gener_1 = c(1,	0,	1,	0,	0,	0),
+#   gener_2 = c(1,	0,	0,	1,	0,	0),
+#   gener_3 = c(1,	0, -1, -1,	0,	0)
+#   )
+# 
+# cm_4_gener
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_4$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_4 <- fit_model_4[keep, ]
+nrow(fit2_model_4)
+
+#fit the contrast matrix
+fit2_model_4 <- contrasts.fit(fit2_model_4, cm_4_gener)
+
+fit2_model_4 <- eBayes(fit2_model_4, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       )
+
+#Results of all contrasts simultaneously
+results_4_gener <- decideTests(fit2_model_4)
+summary(results_4_gener)
+
+#Venn diagram showing numbers of genes significant in the last two coefficients
+vennDiagram(results_4_gener)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_4_gener <- topTable(fit2_model_4,
+                  # coef = c(3:4),
+                  adjust = "BH", number = nrow(fit2_model_4), sort.by = "none")
+
+hist(top_4_gener$P.Value)
+
+qplot(top_4_gener$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of classic interaction model") +
+  theme_classic()
+
+#####
+#Build the contrasts matrix for discovering interaction in females
+cm_4_inter <- bind_cols(
+  # gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+  gen_2v1 = c(0,0,0,0,1,-1),
+  gen_3v1 = c(0,0,0,0,2,1),
+  gen_3v2 = c(0,0,0,0,1,2),
+  )
+
+cm_4_inter 
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_4$Amean > 3 #`Amean` stores the average log expression values
+fit2_model_4 <- fit_model_4[keep, ]
+nrow(fit2_model_4)
+
+#fit the contrast matrix
+fit2_model_4 <- contrasts.fit(fit2_model_4, cm_4_inter)
+
+fit2_model_4 <- eBayes(fit2_model_4, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+results_4_inter <- decideTests(fit2_model_4)
+summary(results_4_inter)
+
+#Venn diagram showing numbers of genes significant in the last two coefficients
+vennDiagram(results_4_inter)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+top_4_inter <- topTable(fit2_model_4,
+                  # coef = c(5:6),
+                  adjust = "BH", number = nrow(fit2_model_4), sort.by = "none")
+
+hist(top_4_inter$P.Value)
+
+qplot(top_4_inter$P.Value,
+      geom="histogram",
+# specify the size of the class interval
+      binwidth = 0.05,
+# specify if bin boundaries fall at centre or ends of class intervals
+      boundary = 0.05) + ylim(0, 800) + 
+  ggtitle("p-value histogram of classic interaction model") +
+  theme_classic()
+```
+
+## Empirical null distributions
+The function `frdtool()` accepts a vector of z-scores, correlations, p-values, or t-scores as input and estimates the parameters of the corresponding null distribution empirically from the data (except in the case of p-values, where it's unnecessary). 
+The kind of null distirbution to be estimated is specified by the argument `statistic`. 
+The author of the package suggests setting `statistic = "normal"` (as opposed to `statistic = "studentt"`) [even when the input is a vector of t-scores"](https://stackoverflow.com/questions/25810435/r-fdrtool-package-how-to-use-t-statistic). 
+
+The null distribution is assumed to be centred at zero, as stated in the [fdrtool manual](https://cran.r-project.org/web/packages/fdrtool/fdrtool.pdf).
+Hence, the column of t-statstics in the output of `topTable()` will first be median-centered and then piped into `fdrtool()`.
+```{r empirical_null}
+library(fdrtool)
+
+# Using t-statistics as input
+
+## group-means interaction model
+
+fdr_1_0 <- (top_1_geno_0$t - median(top_1_geno_0$t)) %>% fdrtool(statistic = "normal", plot = F)
+fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic = "normal", plot = F)
+fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic = "normal", plot = F)
+fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic = "normal", plot = F)
+
+geno_0 <- bind_cols(top_1_geno_0, fdr_1_0) %>% rownames_to_column()
+geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
+geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
+geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
+
+qplot(fdr_1_0$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+
+qplot(fdr_1_1$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+
+qplot(fdr_1_2$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+
+qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of group-means interaction model, corrected (via t-stats)") +
+  theme_classic() +
+  xlab("corrected p-values") + ylim(0, 1250) 
+#####
+# ## nested interaction model
+# 
+# fdr_2 <- (top_2$t - median(top_2$t)) %>% fdrtool(statistic = "normal", plot = F)
+# 
+# qplot(fdr_2$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of nested interaction model, corrected (via t-stats)") +
+#   theme_classic() +
+#   xlab("corrected p-values") + ylim(0, 1250) 
+# 
+# ## classic interaction model
+# fdr_3 <- (top_3$t - median(top_3$t)) %>% fdrtool(statistic = "normal", plot = F)
+# 
+# qplot(fdr_3$pval, geom ="histogram", binwidth = 0.05, boundary = 0.05, color = I("black"), fill = I(NA)) + ggtitle("p-value histogram of classic interaction model, corrected (via t-stats)") +
+#   theme_classic() +
+#   xlab("corrected p-values") + ylim(0, 1250) 
+
+#####
+# # using p-values as input
+# 
+# ## group-means interaction model
+# fdr_1.2 <- top_1$P.Value %>% fdrtool(statistic = "pvalue", plot = F)
+# 
+# qplot(fdr_1.2$pval, geom="histogram") +
+#   ggtitle("p-value histogram of group-means interaction model, corrected (via p-values)") +
+#   theme_classic() +
+#   xlab("corrected p-values")
+# 
+# ## classic interaction model
+# fdr_3.2 <- top_3$P.Value %>% fdrtool(statistic= "pvalue", plot = F)
+# 
+# qplot(fdr_3.2$pval, geom="histogram") +
+#   ggtitle("p-value histogram of classic interaction model, corrected (via p-values)") +
+#   theme_classic() +
+#   xlab("corrected p-values")
+
+```
+
+1.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/o_adj_w/o_FC}
+
+# decideTests() and vennDiagram() are only useful for comparing contrasts present within a model
+# to check the overlap between models look at the intersection of their respective topTable() outputs
+
+# when coef() is used to combine two or more contrasts, then only topTable() output is useful
+
+#addition of the F0 generation caused a slight change in the number of DE genes observed in subsequent generations also. Probably each additional data point gets included in the Bayesian shrinker
+# by_sex2 <- data.frame(matrix(ncol = 12, nrow = 1))
+by_sex2 <- rbind(by_sex2, NA)
+
+by_sex2$geno_0[by_sex2 %>% nrow()] <- geno_0 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+# 1126 DE genes in first generation
+
+by_sex2$geno_1[by_sex2 %>% nrow()] <- geno_1 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+# 584 DE genes in first generation
+
+by_sex2$geno_2[by_sex2 %>% nrow()] <- geno_2 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+# 978 DE genes in second generation
+
+by_sex2$geno_3[by_sex2 %>% nrow()] <- geno_3 %>% filter(pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% count()
+# 771 DE genes in third generation
+
+# Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
+geno_0v1 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_1, geno_1$pval <= 0.05), by = "rowname")
+by_sex2$geno_0v1[by_sex2 %>% nrow()] <- geno_0v1 %>% count()
+# 342 trangen genes overlap
+
+# Genes that are DE across two generations without logFC; p-values uncorrected and unadjusted
+geno_1v2 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
+by_sex2$geno_1v2[by_sex2 %>% nrow()] <- geno_1v2 %>% count()
+# 77 trangen genes overlap
+
+geno_2v3 <- inner_join(subset(geno_2, geno_2$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+by_sex2$geno_2v3[by_sex2 %>% nrow()] <- geno_2v3 %>% count()
+# 164 trangen genes overlap
+
+geno_1v3 <- inner_join(subset(geno_1, geno_1$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+by_sex2$geno_1v3[by_sex2 %>% nrow()] <- geno_1v3 %>% count()
+# 66 trangen genes overlap
+
+geno_0v2 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_2, geno_2$pval <= 0.05), by = "rowname")
+by_sex2$geno_0v2[by_sex2 %>% nrow()] <- geno_0v2 %>% count()
+# 116 trangen genes overlap
+
+geno_0v3 <- inner_join(subset(geno_0, geno_0$pval <= 0.05), subset(geno_3, geno_3$pval <= 0.05), by = "rowname")
+by_sex2$geno_0v3[by_sex2 %>% nrow()] <- geno_0v3 %>% count()
+# 118 trangen genes overlap
+
+geno_0v1v2v3 <- geno_0v1 %>% inner_join(geno_1v2, by = "rowname") %>% inner_join(geno_2v3, by = "rowname")
+by_sex2$geno_0v1v2v3[by_sex2 %>% nrow()] <- geno_0v1v2v3 %>% count()
+# 10 trangen genes overlap across all four generations
+
+geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname")
+by_sex2$geno_1v2v3[by_sex2 %>% nrow()] <- geno_1v2v3 %>% count()
+# 12 trangen genes overlap across all three generations
+
+remove(geno_0v1, geno_0v2, geno_0v3, geno_1v2, geno_2v3, geno_1v3, geno_1v2v3, geno_0v1v2v3)
+```
+
+```{r}
+bind_rows("F0" = geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F1" = geno_1 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F2" = geno_2 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F3" = geno_3 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          .id = "generation") %>% 
+  mutate(colo = case_when(pval <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
+  ggplot(aes(x = logFC, y = -log(pval, 10), colour = colo)) +
+  geom_point(shape= 20) + 
+  # xlim(-2,2) +
+  ylim(0,15) +
+  scale_color_manual(values = c("darkgray", "red")) +
+  facet_wrap(~ #scales = "free",
+             generation) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r}
+f0_f <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_f <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+f0_m <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_m <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+
+library(VennDiagram)
+
+# Chart
+venn.diagram(
+        x = list(f1_f$rowname, f1_m$rowname),
+        category.names = c("F1 Female" , "F1 Male"),
+        filename = 'F1_venn_diagramm.png',
+        output=TRUE)
+
+```
+
+2.   Corrected, w/  FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/_FC}
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 166 DE genes in first generation
+
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 9 DE gene in second generation
+
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 6 DE genes in third generation
+
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected but adjusted
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_2 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_1 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(pval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+```
+
+3.   Corrected, w/o FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/o_FC}
+
+geno_1 %>% filter(qval <= 0.05) %>% count()
+# 55 DE genes in first generation
+
+geno_2 %>% filter(qval <= 0.05) %>% count()
+# 181 DE genes in second generation
+
+geno_3 %>% filter(qval <= 0.05) %>% count()
+# 69 DE genes in third generation
+
+# Genes that are DE across two generations without logFC; p-values uncorrected but adjusted
+geno_1v2 <- inner_join(subset(geno_1, geno_1$qval <= 0.05), subset(geno_2, geno_2$qval <= 0.05), by = "rowname")
+geno_1v2 %>% count()
+# 3 trangen genes overlap
+
+geno_2v3 <- inner_join(subset(geno_2, geno_2$qval <= 0.05), subset(geno_3, geno_3$qval <= 0.05), by = "rowname")
+geno_2v3 %>% count()
+# 10 trangen genes overlap
+
+geno_1v3 <- inner_join(subset(geno_1, geno_1$qval <= 0.05), subset(geno_3, geno_3$qval <= 0.05), by = "rowname")
+geno_1v3 %>% count()
+# 1 trangen genes overlap
+
+geno_1v2v3 <- inner_join(geno_1v2, geno_2v3, by = "rowname") 
+geno_1v2v3 %>% count()
+# no trangen genes overlap across all three generations
+
+remove(geno_1v2, geno_2v3, geno_1v3, geno_1v2v3)
+```
+
+4.   Corrected, w/  FC threshold, w/  p value adj ---    DE genes found in 2nd & 3rd generation
+```{r venn_overlap_w/_adj_w/_FC}
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 41 DE genes in first generation
+
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 1 DE gene in second generation
+
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 2 DE genes in third generation
+
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected but adjusted
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_2 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+
+geno_1 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2) %>% inner_join(
+geno_3 %>% filter(qval <= 0.05 & abs(logFC) >= 1.2), by = "rowname") %>% count()
+# no trangen gene overlap
+```
+
+5. Uncorrected, w/o FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/o_adj_w/o_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
+# 1201 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.0) %>% count()
+# 0 DE genes in second generation
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05) %>% count()
+# 30 DE genes in third generation
+```
+
+6. Uncorrected, w/  FC threshold, w/o p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/o_adj_w/_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 238 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(P.Value <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in third generation
+```
+
+7. Uncorrected, w/o FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/_adj_w/o_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05) %>% count()
+# 66 DE genes in first generation
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.0) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05) %>% count()
+# 0 DE genes in third generation 
+```
+
+8. Uncorrected, w/  FC threshold, w/  p value adj --- no DE genes found in 2nd & 3rd generation
+```{r venn_overlap__w/_adj_w/_FC}
+# Genes that are DE across two generations with logFC >= 1.2; p-values uncorrected AND unadjusted
+top_1_geno_1 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 49 DE genes in first generation; 
+
+top_1_geno_2 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in second generation 
+
+top_1_geno_3 %>% rownames_to_column() %>% filter(adj.P.Val <= 0.05 & abs(logFC) >= 1.2) %>% count()
+# 0 DE genes in third generation 
+```
+
+Observations:
+
+-   Should probes with an average expression level below 3 be filtered out (line 701)?
+
+```{r filtration}
+# The different models arranged by how many DE genes they produce in the first generation:
+# If pasted outside the code chunk, the following code-table will be rendered as an HTML-table in the visual editor
+("
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtration | model | empirical_null | fc_cutoff | p_value    | g1   | g2   | g3   | remarks               |
++:===========+:======+:===============+:==========+:===========+=====:+=====:+=====:+=======================+
+| filtered   | m1    | applied        | absent    | unadjusted | 584  | 978  | 771  | most_favorable        |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m2    | applied        | present   | unadjusted | 166  | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m3    | applied        | absent    | adjusted   | 55   | 181  | 69   |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m4    | applied        | present   | adjusted   | 41   | 1    | 2    | for_transgen_exp_plot |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m5    | unapplied      | absent    | unadjusted | 1201 | 0    | 30   | most_stringent        |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m6    | unapplied      | present   | unadjusted | 238  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m7    | unapplied      | absent    | adjusted   | 66   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| filtered   | m8    | unapplied      | present   | adjusted   | 49   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m1    | applied        | absent    | unadjusted | 1039 | 5030 | 5257 |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m2    | applied        | present   | unadjusted | 120  | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m3    | applied        | absent    | adjusted   | 92   | 3697 | 3933 |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m4    | applied        | present   | adjusted   | 26   | 9    | 6    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m5    | unapplied      | absent    | unadjusted | 3707 | 0    | 127  |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m6    | unapplied      | present   | unadjusted | 231  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m7    | unapplied      | absent    | adjusted   | 347  | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+| unfiltered | m8    | unapplied      | present   | adjusted   | 66   | 0    | 0    |                       |
++------------+-------+----------------+-----------+------------+------+------+------+-----------------------+
+  ") %>% 
+  str_remove_all("[ \\-\\+\\=\\:]") %>% # converts into a string while returning only the '|'
+  read_delim(delim = '|', col_types = "_fffffdddc_") %>% # reads in as a data frame; skips empty columns
+  # gt::gt() # renders as an HTML table in the viewer
+  gather(g1, g2, g3, key = "gener", value = "genes") %>% # converts the data frame into long form
+  ggplot(aes(x = model, y = genes, fill = gener)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  facet_wrap(~filtration) + # faceting by filtration status of the probes
+  coord_cartesian(ylim = c(0, 1200)) # truncates out excessively long bars
+# If filtered, the first generation DE probes decrease from m1 to m4, then again from m5 to m8;
+# An almost identical pattern is observed with unfiltered probes.
+```
+
+    Retaining low-expression probes does not make a difference to the rank of the models (ranked according to no. of DE genes observed in their respective first generations). But it gives rise to results that can only be explained as noise: an unreasonable number of DE genes in the second and third generations of models 1 and 3 (sometimes as much 25% of all probes), and a weird p-value histogram in the first generation. Thus, it would be most scientifically accurate to filter out low-expression probes.
+
+-   How should the volcano plot be built?
+
+```{r volcano}
+volcanoplot(fit2_model_1, coef = 1, style = "p-value", highlight = 0, names = fit$genes$ID, hl.col = "blue",
+            xlab = "Log2 Fold Change", ylab = NULL, pch = 16, cex = 0.35, xlim = c(-6, 11), ylim = c(0,20))
+```
+
+    Model 5 built with filtered probes gives a volcano plot with a furrow; in contrast, model5 with unfiltered probes has no furrow since the probes with low fold change mask out the furrow. Thus, it's better to filter out low expression probes.
+
+-   How should the transgenerational expression pattern of a few representative (diabetes-relevant) genes be plotted?
+
+```{r expression_plots}
+
+# expression levels of each gene 'i' that is significantly DE across all three generations
+for (i in geno_1v2v3$rowname) {
+  print(
+    ggplot(data = pData(eset_mini), aes(x = generation, y = exprs(eset_mini)[i, ], fill = genotype)) +
+      geom_dotplot(position = position_dodge(1), binaxis = "y", stackdir = "center", alpha = 0.7) +
+      geom_boxplot(position = position_dodge(1), alpha = 0.7) +
+      ylab(i) +
+      theme_classic()
+  )
+}
+```
+
+    The expression levels of most genes overlapped a lot between the control and test samples when they were selected based on only their p-values; to reduce the overlap, a fold-change cutoff (logFC \>=1.2) was added to the selection criteria---the same principle which underlies a volcano plot.This would be the best way to show expression data to a general audience.
+
+-   In the corrected model, how should FDR be controlled (i.e. how should model 3 be built)?
+
+    `fdrtool()` applies tail area-based correction to control FDR; however, its output agrees with BH correction most of the time; since BH correction is more understandable, use it instead of the former if using model 3.
+
+-   What the DE analysis be started at F0 or F1; what should be F1 genotype?
+
+    Start at F0. F2 is trangenerational with respect to F0 and F3 is transgenerational with respect to F1. Thus we chan check for TEI of both the construct plus balancers and the independent effect of balancers.
+
+To do:
+[] - Repeat with other sex
+[] - Prepare Final List with #1
+
+```{r p_value_loop, eval = FALSE}
+# plot p-value histograms of each ExpressionSet objects containing probes of different intensities 
+
+for(i in seq_along(1:15)){
+  
+# Create single variable
+group <- with(pData(eset_list[[i]]), paste(generation, genotype, sex, day, sep = "."))
+pData(eset_list[[i]])$group <- as.factor(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 + group, data = pData(eset_list[[i]]))
+colnames(design_1) <- levels(pData(eset_list[[i]])$group)
+
+#Build the contrasts matrix for females
+contrast_matrix_1 <- makeContrasts(
+# gen_1v0 = (F1.test.female-F0.test.female) - (F1.control.female-F0.control.female),
+# gen_2v1 = (F2.test.female-F1.test.female) - (F2.control.female-F1.control.female),
+gen_3v2 = (
+  (#(F3.test.female.1-F2.test.female.1) +
+             # (F3.test.female.2-F2.test.female.2) +
+             (F3.test.female.3-F2.test.female.3))
+#           /2)
+- (
+  (
+    #(F3.control.female.1-F2.control.female.1) +
+                                                         # (F3.control.female.2-F2.control.female.2) +
+                                                         (F3.control.female.3-F2.control.female.3))
+#  /2)
+,
+# gen_3v1 = (F3.test.female-F1.test.female) - (F3.control.female-F1.control.female),
+                                  levels = design_1)
+
+fit_model_1 <- lmFit(eset_list[[i]], design_1)
+fit2_model_1 <- contrasts.fit(fit_model_1, contrast_matrix_1)
+fit2_model_1 <- eBayes(fit2_model_1)
+top_1 <- topTable(fit2_model_1, adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+hist(top_1$P.Value, breaks = 100, xlim = c(0,1),
+      main = str_glue("p-value histogram of probes with intensities above {i} rma"))
+}
+```
+
+#
+[Ignore: section added between first and second update of the pipeline, [as seen in the history](<https://github.com/ameekbhalla/Microarray/commits/master/Microarray%20Pipeline.Rmd)]
+> conclusions based on boxplots (code above)
+1. topTable() puts out ANOVA F-values where applicable because its unsorted `P.Val` and `F.p.value` obtained from the `fit2` model objects are the same. 
+2. The 29 genes whose adj.P.Val <= 0.05 in topTable are the same as the 28 genes that overlap in the Venn diagram between gen_2v1 and gen_3v1, only probe 1626202_at differs.
+3. In boxplots of all these 28 probes (stored in item `sig_F`) only the F1 generation test genotype differs from the other groups; the F1 control and F2 tests and controls cluster together along the Y-axis. It's likely that many other probes also show this pattern, but the F1 test deviation of only these 28 probes is large enough to register as an intercation effect (visual metaphor: the F1 test pulls the test trendline so far away at generation timepoint 1, that the overall test trendline is calculated to be different from the overall control line for these 28 probes.).
+4. Compare a simple model with just the main effect of generation with a complex model including both the main effect and the interaction to see if the interaction is driven completely by the main effect.
+5. Perform Tukey pairwise comparison **between** the three contrasts of the interaction to discover which one is significant
+6. Similarly perform Tukey pairwise comparison **within** the three contrasts of the main effcet of gneration to discover which one is significant
+7. check p-value histgrams of main  effects
+
+> check if including any of the following steps imporves the shape of p-value hists [done]
+7. remove the three largest sources of variation **before** RMA/GCRMA (sex, generation, & L9F2) [done]
+8. Include more variables in the model [done; included the variable `replicate`]
+9. remove both low **and** high intensity probes (ie remove humps from both sides) [done]
+
+> refresher
+* subsetting with square brackets returns a data frame and subsetting with $ returns a vector
+* one cannot pipe through row names to the downstream steps after either filtering or subsetting
+* Search Datacamp courses (listed in Google Keep) to make ggplot versions of the plots.
+
+# Acknowledgements
+(Incorporate these acknowledgements into the references)
+This content was developed by heavily modifying content from [VIB Bioinformatics Core Wiki](https://wiki.bits.vib.be/index.php/Analyze_your_own_microarray_data_in_R/Bioconductor) and [@Klaus2019]
+
+(Correct the terminology for the variables. Check out https://www.theanalysisfactor.com/whats-in-a-name-moderation-and-interaction-predictor-and-predictor-variables/)
+
+***
+
+# References
+
+
