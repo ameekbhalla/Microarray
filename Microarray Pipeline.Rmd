@@ -320,7 +320,7 @@ The ExpressionSet obejects were filtered to remove genes with low expression and
 eset_list <- list()
 eset2_list <- list()
 
-for (i in seq_along (1:15)) {
+for (i in seq_along (1:15)) {#set seq to 1 to produce plot showing the normalizing effect of gcrma as in DAC2 slide 30
   keep <- rowMeans(exprs(eset)) > i
   eset_list[[i]] <- eset[keep, ] #ExpressionSet objects cannot be subset with filter() or filter()
   plotDensities(eset_list[[i]], group = pData(eset_list[[i]])$generation, legend = "topright",
@@ -513,6 +513,268 @@ plotMDS(eset_m_wt, labels = pData(eset_m_wt)$replicate, gene.selection = "common
 
 Just the  wild-type samples too fall into two clusters across 'Principal Component 1': cluster (a) consisting of samples from generations F-1 and F0 + F1 or cluster (b) consisting of samples from generations F2 & F3.
 
+```{r pca_plots}
+######
+# PCA on whole data showing most of the variation is due to sex
+exp_raw <- log2(Biobase::exprs(eset))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    sex = pData(eset)$sex
+                    )
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = sex, colour = sex)) +
+  ggtitle("Most of the variation is due to sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_fixed(ratio = sd_ratio) +
+  scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+
+######
+# PCA on male data showing most of the variation is due to generation after removing sex
+exp_raw <- log2(Biobase::exprs(eset_m))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    generation = pData(eset_m)$generation,
+                    genotype = pData(eset_m)$genotype,
+                    replicate = pData(eset_m)$replicate,
+                    Batch = pData(eset_m)$day
+                    )
+
+dataGG <- dataGG %>%
+  mutate(
+    Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+      replicate == "L5" | replicate == "L4" ~ "rep1",
+      replicate == "L9" | replicate == "L8" ~ "rep2",
+      replicate == "L10"              ~ "rep3",
+      TRUE                      ~ "rep4") %>% as_factor(),
+    Lineage = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      genotype == "rpr/+; dilp3/+" ~ "test",
+      genotype == "cyo/+; dilp3/+" ~ "test",
+      genotype == "rpr/+; ser/+" ~ "test",
+      genotype == "cyo/+; ser/+" ~ "test",
+      genotype == "test" ~ "test",
+      TRUE ~ "control") %>% as_factor(),
+    Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+      genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+      genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+      genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+      TRUE    ~ "w1118") %>% as_factor(),
+    Generation = case_when( # convert F-1 and the "F0" in "F0 + F1" into F0
+      genotype == "rpr/cyo; dilp3/ser" | generation == "F-1" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor())
+
+# dataGG$Generation <- factor(dataGG$Generation, levels=c("F0", "F1", "F2", "F3"))
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = Generation, colour = Generation)) +
+  ggtitle("Most of the variation is due to generation, after removing sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_fixed(ratio = sd_ratio) +
+  # scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+
+######
+# PCA on male data gener F2 & F3 showing most of the variation is due to generation after removing sex
+
+m_f2_f3 <- which(pData(eset)$sex      == "male" & (
+              pData(eset)$genotype == "control" | 
+              # pData(eset)$genotype == "w1118"   | 
+              pData(eset)$genotype == "test"    )
+              )
+
+eset_m_f2_f3 <- eset[ , m_f2_f3] #ExpressionSet objects cannot be subset with filter() or filter()
+
+exp_raw <- log2(Biobase::exprs(eset_m_f2_f3))
+PCA_raw <- prcomp( #Performs PCA on given matrix and returns results as an object of class prcomp
+  t(exp_raw), #transpose
+  scale. = FALSE
+  )
+
+percentVar <- round(100*PCA_raw$sdev^2/sum(PCA_raw$sdev^2), 1) #round to first place after decimal
+sd_ratio <- sqrt(percentVar[2] / percentVar[1])
+
+dataGG <- data.frame(PC1 = PCA_raw$x[,1], PC2 = PCA_raw$x[,2],
+                    generation = pData(eset_m_f2_f3)$generation,
+                    genotype = pData(eset_m_f2_f3)$genotype,
+                    replicate = pData(eset_m_f2_f3)$replicate,
+                    Batch = pData(eset_m_f2_f3)$day
+                    )
+
+dataGG <- dataGG %>%
+  mutate(
+    Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+      replicate == "L5" | replicate == "L4" ~ "rep1",
+      replicate == "L9" | replicate == "L8" ~ "rep2",
+      replicate == "L10"              ~ "rep3",
+      TRUE                      ~ "rep4") %>% as_factor(),
+    Lineage = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      genotype == "rpr/+; dilp3/+" ~ "test",
+      genotype == "cyo/+; dilp3/+" ~ "test",
+      genotype == "rpr/+; ser/+" ~ "test",
+      genotype == "cyo/+; ser/+" ~ "test",
+      genotype == "test" ~ "test",
+      TRUE ~ "control") %>% as_factor(),
+    Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+      genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+      genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+      genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+      TRUE    ~ "w1118") %>% as_factor(),
+    Generation = case_when( # convert F-1 and the "F0" in "F0 + F1" into F0
+      genotype == "rpr/cyo; dilp3/ser" | generation == "F-1" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor())
+
+ggplot(dataGG, aes(PC1, PC2)) +
+      geom_point(aes(shape = Lineage, colour = Lineage)) +
+  # geom_text(label = dataGG$replicate) + # replicate L9 separates furthest along the x-axis
+  ggtitle("Most of the variation is due to generation, after removing sex") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_fixed(ratio = sd_ratio) +
+  # scale_shape_manual(values = c(4,15)) + 
+#  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+  theme_classic()
+```
+
+```{r RLE_plot}
+# shows if any arrays have abnormally low median expression
+eset_rma <- gcrma(raw_data, target = "core", normalize = FALSE)
+
+row_medians_assayData <- 
+  Biobase::rowMedians(as.matrix(Biobase::exprs(eset_rma)))
+
+RLE_data <- sweep(Biobase::exprs(eset_rma), 1, row_medians_assayData)
+
+RLE_data <- as.data.frame(RLE_data)
+RLE_data_gathered <- 
+  tidyr::gather(RLE_data, label, log2_expression_deviation)
+
+RLE_data_gathered <- inner_join(RLE_data_gathered, pData(eset))
+
+ggplot2::ggplot(RLE_data_gathered, aes(label,
+                                       log2_expression_deviation, color = generation)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  ylim(c(-2, 2)) + 
+  theme(axis.text.x = element_text(colour = "aquamarine4", 
+                                  angle = 60, size = 6.5, hjust = 1 ,
+                                  face = "bold"))
+# the first two generation arrays deviate below zero, while the latter two deviate above it
+```
+
+```{r heatmaps}
+
+annotation_for_heatmap <- 
+  data.frame(
+    # sex = pData(eset)$sex
+    # batch = pData(eset)$replicate,
+    generation = pData(eset_m)$generation,
+    genotype = pData(eset_m)$genotype
+             )
+
+annotation_for_heatmap <- annotation_for_heatmap %>%
+  mutate(
+    # Replicate = case_when( # assign replicates numbers from 1-4 to different lots
+    #   replicate == "L5" | replicate == "L4" ~ "rep1",
+    #   replicate == "L9" | replicate == "L8" ~ "rep2",
+    #   replicate == "L10"              ~ "rep3",
+    #   TRUE                      ~ "rep4") %>% as_factor(),
+    # Lineage = case_when( # categorize genotypes into test or control lineages
+    #   genotype == "rpr/cyo; dilp3/ser" ~ "test",
+    #   genotype == "rpr/+; dilp3/+" ~ "test",
+    #   genotype == "cyo/+; dilp3/+" ~ "test",
+    #   genotype == "rpr/+; ser/+" ~ "test",
+    #   genotype == "cyo/+; ser/+" ~ "test",
+    #   genotype == "test" ~ "test",
+    #   TRUE ~ "control") %>% as_factor(),
+    # Genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+    #   genotype == "rpr/cyo; dilp3/ser" ~ "rpr/cyo; dilp3/ser",
+    #   genotype == "rpr/+; dilp3/+" ~ "rpr/+; dilp3/+",
+    #   genotype == "cyo/+; dilp3/+" ~ "cyo/+; dilp3/+",
+    #   genotype == "rpr/+; ser/+" ~ "rpr/+; ser/+",
+    #   genotype == "cyo/+; ser/+" ~ "cyo/+; ser/+",
+    #   TRUE    ~ "w1118") %>% as_factor()
+    generation = case_when( # convert F-1 and the "F0" in "F0 + F1" into F0
+      genotype == "rpr/cyo; dilp3/ser" | generation == "F-1" ~ "F0",
+      generation == "F2" ~ "F2",
+      generation == "F3" ~ "F3",
+      TRUE ~ "F1") %>% as_factor()
+    )
+
+annotation_for_heatmap$genotype <- NULL
+
+pData(eset_m)$group <- with(pData(eset_m), 
+                            paste(generation,
+                                  replicate,
+                                  day,
+                                  genotype, 
+                                  sep = "_")) %>% as.factor()
+
+row.names(annotation_for_heatmap) <- pData(eset_m)$group
+
+exp_eset_m <- Biobase::exprs(eset_m)
+dists <- as.matrix(dist(t(exp_eset_m), method = "manhattan"))
+
+rownames(dists) <- pData(eset_m)$group
+hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(9, "YlOrRd"))(255))
+colnames(dists) <- NULL
+diag(dists) <- NA
+
+ann_colors <- list(
+# lineage = c("test" = "#00BFC4","control" = "#F8766D")
+  # sex = c("male" = "#00BFC4","female" = "#F8766D")
+  generation = c( "F0" = "#F8766D", "F1" = "#7CAE00", "F2" = "#00BFC4", "F3" = "#C77CFF")
+  # genotype = c("control" = "red", "test" = "#FFBF00","w1118" = "#80FF00", "rpr/cyo; dilp3/ser" = "#00FF40", "cyo/+; ser/+" = "cyan", "rpr/+; dilp3/+" = "#0040FF", "cyo/+; dilp3/+" = "#8000FF", "rpr/+; ser/+" = "#FF00BF")
+  # genotype = c(
+  #   "control" = "red", 
+  #   "test" = "yellow",
+  #   "w1118" = "green", 
+  #   "rpr/cyo; dilp3/ser" = "cyan", 
+  #   "cyo/+; ser/+" = "blue", 
+  #   "rpr/+; dilp3/+" = "magenta")
+  )
+
+pheatmap::pheatmap(dists, col = (hmcol), 
+         annotation_row = annotation_for_heatmap,
+         annotation_colors = ann_colors,
+         legend = TRUE, 
+         treeheight_row = 0,
+         legend_breaks = c(min(dists, na.rm = TRUE), 
+                         max(dists, na.rm = TRUE)), 
+         legend_labels = (c("small distance", "large distance")),
+         # main = "Clustering heatmap"
+         )
+```
 
 # Senstivity analysis of methods dealing with technical variation
 Three different methods can deal with technical variation:
@@ -1403,12 +1665,26 @@ qplot(fdr_1_3$pval, geom = "histogram", binwidth = 0.05, boundary = 0.05, color 
 
 ```
 
+```{r annotation}
+#annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
+anno_eset <- AnnotationDbi::select(drosophila2.db,
+                                       keys = (featureNames(eset)), #indexes the rows
+                                       columns = c("SYMBOL", "GENENAME"), #indexes the columns
+                                       keytype = "PROBEID") %>% #arranges the output by this column
+  filter(!is.na(SYMBOL)) %>% # this also removes quality control probes
+  group_by(PROBEID) %>%
+  filter(n() == 1) # remove  probes which have multiple genes associated with them
+# check that all quality control probes, containing the pattern AFFX in their name, were removed
+# str_detect(anno_eset$PROBEID, "AFFX") %>% sum()
+```
+
 ```{r data_export}
+# data given to Abhay on 14 September 2021
+
 library(XLConnect)
-f0 <- geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% 
-  #select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
-View()
 male <- loadWorkbook("male.xlsx", create = TRUE)
+
+f0 <- geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
 createSheet(male, "f0")
 writeWorksheet(male, f0, "f0")
 
@@ -1423,7 +1699,43 @@ writeWorksheet(male, f2, "f2")
 f3 <- geno_3 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% select(18, 19, 2, 3, 4, 8) %>% rename(symbol = SYMBOL, gene_name = GENENAME)
 createSheet(male, "f3")
 writeWorksheet(male, f3, "f3")
+
 saveWorkbook(male, "male.xlsx")	
+```
+
+```{r volcano_plots}
+bind_rows("F0" = geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F1" = geno_1 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F2" = geno_2 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          "F3" = geno_3 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+          .id = "generation") %>% 
+  mutate(colo = case_when(pval <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
+  ggplot(aes(x = logFC, y = -log(pval, 10), colour = colo)) +
+  geom_point(shape = 20) + 
+  # xlim(-2,2) +
+  ylim(0,15) +
+  scale_color_manual(values = c("darkgray", "red")) +
+  facet_wrap(~ #scales = "free",
+             generation) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r Venn_Diagrams}
+f0_f <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_f <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+f0_m <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_m <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+library(VennDiagram)
+
+# Chart
+venn.diagram(
+        x = list(f1_f$rowname, f1_m$rowname),
+        category.names = c("F1 Female" , "F1 Male"),
+        filename = 'F1_venn_diagramm.png',
+        output = TRUE)
 ```
 
 1.   Corrected, w/o FC threshold, w/o p value adj ---    DE genes found in 2nd & 3rd generation
