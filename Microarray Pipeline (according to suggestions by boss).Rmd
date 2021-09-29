@@ -680,32 +680,38 @@ f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>
 ```{r write_files}
 #####
 library(XLConnect)
+
 by_generation2 <- loadWorkbook("by_generation2.xlsx", create = TRUE)
 
-#####
-createSheet(by_generation2, "rpr.cyo_dilp3.ser_f")
-writeWorksheet(by_generation2, rpr.cyo_dilp3.ser_f, "rpr.cyo_dilp3.ser_f")
+createSheet(by_generation2, "rpr.cyo_dilp3.ser_f0_m")
+writeWorksheet(by_generation2, rpr.cyo_dilp3.ser_m, "rpr.cyo_dilp3.ser_f0_m")
+saveWorkbook(by_generation2, "by_generation2.xlsx")
 
-createSheet(by_generation2, "cyo_ser_f")
-writeWorksheet(by_generation2, cyo_ser_f, "cyo_ser_f")
+createSheet(by_generation2, "cyo_ser_f1_m")
+writeWorksheet(by_generation2, cyo_ser_m, "cyo_ser_f1_m")
+saveWorkbook(by_generation2, "by_generation2.xlsx")
 
-createSheet(by_generation2, "rpr_dilp3_f")
-writeWorksheet(by_generation2, rpr_dilp3_f, "rpr_dilp3_f")
+createSheet(by_generation2, "rpr_dilp3_f1_m")
+writeWorksheet(by_generation2, rpr_dilp3_m, "rpr_dilp3_f1_m")
+saveWorkbook(by_generation2, "by_generation2.xlsx")
 
-createSheet(by_generation2, "cyo_dilp3_f")
-writeWorksheet(by_generation2, cyo_dilp3_f, "cyo_dilp3_f")
+createSheet(by_generation2, "cyo_dilp3_f1_m")
+writeWorksheet(by_generation2, cyo_dilp3_m, "cyo_dilp3_f1_m")
+saveWorkbook(by_generation2, "by_generation2.xlsx")
 
-createSheet(by_generation2, "rpr_ser_f")
-writeWorksheet(by_generation2, rpr_ser_f, "rpr_ser_f")
 
-createSheet(by_generation2, "f2_f")
-writeWorksheet(by_generation2, f2_f, "f2_f")
+by_generation2.2 <- loadWorkbook("by_generation2.2.xlsx", create = TRUE)
+createSheet(by_generation2.2, "rpr_ser_f1_m")
+writeWorksheet(by_generation2.2, rpr_ser_m, "rpr_ser_f1_m")
+saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
 
-createSheet(by_generation2, "f3_f")
-writeWorksheet(by_generation2, f3_f, "f3_f")
+createSheet(by_generation2.2, "f2_m")
+writeWorksheet(by_generation2.2, f2_m, "f2_m")
+saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
 
-#####
-saveWorkbook(by_generation, "by_generation2.xlsx")
+createSheet(by_generation2.2, "f3_m")
+writeWorksheet(by_generation2.2, f3_m, "f3_m")
+saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
 ```
 
 ```{r counts}
