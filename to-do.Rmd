@@ -1,0 +1,13 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+0. also map fb gene ids against chromosomal coordinates
+0.5 correct geo submission
+1. unsupervised clustering with all 66 arrays (dendrogram, and with heatmap)
+2. PCA along multiple dimensions until groups stop segregating
+3. The above two with DEG data obtained from boss
+-----------
+4. repeat 1-2 with Manoj's data
+5. repeat 3, after confirmation of the comparison groups
