@@ -647,71 +647,73 @@ anno_eset <- AnnotationDbi::select(drosophila2.db,
 library(fdrtool)
 
 #####
-rpr.cyo_dilp3.ser_f <- (rpr.cyo_dilp3.ser_f$t - median(rpr.cyo_dilp3.ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+rpr.cyo_dilp3.ser_f <- (rpr.cyo_dilp3.ser_f$t - median(rpr.cyo_dilp3.ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_ser_f <- (cyo_ser_f$t - median(cyo_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+cyo_ser_f <- (cyo_ser_f$t - median(cyo_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_dilp3_f <- (rpr_dilp3_f$t - median(rpr_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+rpr_dilp3_f <- (rpr_dilp3_f$t - median(rpr_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_dilp3_f <- (cyo_dilp3_f$t - median(cyo_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+cyo_dilp3_f <- (cyo_dilp3_f$t - median(cyo_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_ser_f <- (rpr_ser_f$t - median(rpr_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+rpr_ser_f <- (rpr_ser_f$t - median(rpr_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
 #####
-rpr.cyo_dilp3.ser_m <- (rpr.cyo_dilp3.ser_m$t - median(rpr.cyo_dilp3.ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+rpr.cyo_dilp3.ser_m <- (rpr.cyo_dilp3.ser_m$t - median(rpr.cyo_dilp3.ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_ser_m <- (cyo_ser_m$t - median(cyo_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+cyo_ser_m <- (cyo_ser_m$t - median(cyo_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_dilp3_m <- (rpr_dilp3_m$t - median(rpr_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+rpr_dilp3_m <- (rpr_dilp3_m$t - median(rpr_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_dilp3_m <- (cyo_dilp3_m$t - median(cyo_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+cyo_dilp3_m <- (cyo_dilp3_m$t - median(cyo_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_ser_m <- (rpr_ser_m$t - median(rpr_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na()
+rpr_ser_m <- (rpr_ser_m$t - median(rpr_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f2_f <- (f2_f$t - median(f2_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+f2_f <- (f2_f$t - median(f2_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f2_m <- (f2_m$t - median(f2_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+f2_m <- (f2_m$t - median(f2_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f3_f <- (f3_f$t - median(f3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+f3_f <- (f3_f$t - median(f3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") %>% drop_na() 
+f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
 ```
 
 ```{r write_files}
 #####
 library(XLConnect)
 
-by_generation2 <- loadWorkbook("by_generation2.xlsx", create = TRUE)
-
-createSheet(by_generation2, "rpr.cyo_dilp3.ser_f0_m")
-writeWorksheet(by_generation2, rpr.cyo_dilp3.ser_m, "rpr.cyo_dilp3.ser_f0_m")
-saveWorkbook(by_generation2, "by_generation2.xlsx")
-
-createSheet(by_generation2, "cyo_ser_f1_m")
-writeWorksheet(by_generation2, cyo_ser_m, "cyo_ser_f1_m")
-saveWorkbook(by_generation2, "by_generation2.xlsx")
-
-createSheet(by_generation2, "rpr_dilp3_f1_m")
-writeWorksheet(by_generation2, rpr_dilp3_m, "rpr_dilp3_f1_m")
-saveWorkbook(by_generation2, "by_generation2.xlsx")
-
-createSheet(by_generation2, "cyo_dilp3_f1_m")
-writeWorksheet(by_generation2, cyo_dilp3_m, "cyo_dilp3_f1_m")
-saveWorkbook(by_generation2, "by_generation2.xlsx")
-
+# by_generation2 <- loadWorkbook("by_generation2.xlsx", create = TRUE)
+# 
+# createSheet(by_generation2, "rpr.cyo_dilp3.ser_f0_f")
+# writeWorksheet(by_generation2, rpr.cyo_dilp3.ser_f, "rpr.cyo_dilp3.ser_f0_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
+# 
+# createSheet(by_generation2, "cyo_ser_f1_f")
+# writeWorksheet(by_generation2, cyo_ser_f, "cyo_ser_f1_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
+# 
+# createSheet(by_generation2, "rpr_dilp3_f1_f")
+# writeWorksheet(by_generation2, rpr_dilp3_f, "rpr_dilp3_f1_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
 
 by_generation2.2 <- loadWorkbook("by_generation2.2.xlsx", create = TRUE)
-createSheet(by_generation2.2, "rpr_ser_f1_m")
-writeWorksheet(by_generation2.2, rpr_ser_m, "rpr_ser_f1_m")
+createSheet(by_generation2.2, "cyo_dilp3_f1_f")
+writeWorksheet(by_generation2.2, cyo_dilp3_f, "cyo_dilp3_f1_f")
 saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
 
-createSheet(by_generation2.2, "f2_m")
-writeWorksheet(by_generation2.2, f2_m, "f2_m")
-saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
+by_generation2.3 <- loadWorkbook("by_generation2.3.xlsx", create = TRUE)
+createSheet(by_generation2.3, "rpr_ser_f1_f")
+writeWorksheet(by_generation2.3, rpr_ser_f, "rpr_ser_f1_f")
+saveWorkbook(by_generation2.3, "by_generation2.3.xlsx")
 
-createSheet(by_generation2.2, "f3_m")
-writeWorksheet(by_generation2.2, f3_m, "f3_m")
-saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
+by_generation2.4 <- loadWorkbook("by_generation2.4.xlsx", create = TRUE)
+createSheet(by_generation2.4, "f2_f")
+writeWorksheet(by_generation2.4, f2_f, "f2_f")
+saveWorkbook(by_generation2.4, "by_generation2.4.xlsx")
+
+# by_generation2.5 <- loadWorkbook("by_generation2.5.xlsx", create = TRUE)
+# createSheet(by_generation2.5, "f3_f")
+# writeWorksheet(by_generation2.5, f3_f, "f3_f")
+# saveWorkbook(by_generation2.5, "by_generation2.5.xlsx")
 ```
 
 ```{r counts}
