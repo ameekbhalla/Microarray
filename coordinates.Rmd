@@ -50,12 +50,16 @@ sheet_2 <- sheet_2 %>% mutate(chromosome_2 = case_when(
                                  TRUE ~ "dmel_mitochondrion_genome"
                                ) %>% as_factor())
 
+sheet_1$genes <- vector(mode = "list", length = nrow(sheet_1))
 
-for (i in 1:length(sheet_1$end)) {
-sheet_1$genes[[i]]  <- which(sheet_1$chromosome[i] == sheet_2$chromosome_2 & 
-                              sheet_1$end[i] >= sheet_2$start & sheet_2$start >= sheet_1$start[i] )  %>%
-    as.list()
+for (i in seq(1:8428)) {
+sheet_1$genes[[i]]  <- sheet_2 %>% slice(which(sheet_1$chromosome[i] == sheet_2$chromosome_2 & 
+                                               sheet_1$end[i] >= sheet_2$start & sheet_2$start >= sheet_1$start[i])) %>%
+  pluck("gene") %>% as.list()
   }
 
+sheet_2 %>% slice(which(sheet_1$chromosome[1] == sheet_2$chromosome_2 & 
+                                               sheet_1$end[1] >= sheet_2$start & sheet_2$start >= sheet_1$start[1])) %>%
+  pluck("gene") %>% as.list()
 ```
 
