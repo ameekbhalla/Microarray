@@ -1,0 +1,61 @@
+---
+title: "Untitled"
+author: "Ameek Bhalla"
+date: "10/31/2021"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+## Agenda
+## Life History
+## Genetic models of different diseases
+[] rebuild Berg and Geschwind figure
+## Open science
+[] Science ambassador certificate
+## Agenda Item #1
+## The problem of missing heritability
+## Controvery around solutions to missing heritability
+## Limitations of previous studies
+## PhD schematic
+[] Write out model equation
+## Analysis pipeline
+## Analysitcal challenges
+## How to treat sex
+[] sensitivity analysis for effect of sex
+## Quantile normalization -- within or across
+[] simulation for effect of normalization
+## Can we estimate random effects
+[] semnsitivity analysis of random effects
+## My soltuions have general applicability
+[] how much did the overall power increase
+## PhD results
+## Summary side
+## Domian specific knowledge
+## Match between Sage ethos and mine
+
+This is an R Markdown presentation. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+## Slide with Bullets
+
+- Bullet 1
+- Bullet 2
+- Bullet 3
+
+## Slide with R Output
+
+```{r cars, echo = TRUE}
+summary(cars)
+```
+
+## Slide with Plot
+
+```{r pressure}
+plot(pressure)
+```
+
+
+
