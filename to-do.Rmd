@@ -11,3 +11,8 @@ output: html_notebook
 -----------
 4. repeat 1-2 with Manoj's data
 5. repeat 3, after confirmation of the comparison groups
+-----------
+- Pathway
+- gene set enrichment
+- clustering based on most DE genes
+- TAG
