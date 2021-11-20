@@ -15,4 +15,4 @@ output: html_notebook
 - Pathway
 - gene set enrichment
 - clustering based on most DE genes
-- TAG
+- TAG glmm
