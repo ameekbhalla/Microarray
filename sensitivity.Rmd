@@ -57,5 +57,1008 @@ summary(cars)
 plot(pressure)
 ```
 
+#####
+```{r setup results = "hide"}
+## Set default chunk options
 
+knitr::opts_chunk$set(results = "hide", 
+                      tidy = TRUE)
+## Load Packages
+library(affy) # Bioconductor package for analysis of older Affymetrix arrays
+#library(affyio)
+#library(affyPLM)
+#library(annaffy)
+#library(annotate)
+#library(arrayQualityMetrics)
+library(BiocManager)
+library(drosophila2.db) # annotation package for the model organism
+library(drosophila2cdf)
+library(formatR)
+library(gcrma)
+library(htmltools)
+library(knitr)
+library(limma)
+#library(markdown)
+library(rmarkdown)
+#library(simpleaffy)
+library(tidyverse)
+```
+
+
+Without eBayes
+```{r without eBayes}
+top_1_geno_0$t_old <- fit2_model_1$coef[,4]/fit2_model_1$stdev.unscaled[,4]/fit2_model_1$sigma
+top_1_geno_0$P.Value_old <- 2 * pt(-abs(top_1_geno_0$t_old), df = fit2_model_1$df.residual)
+
+top_1_geno_0 %>% filter(abs(t_old) >= 1.96) %>% count()
+top_1_geno_0 %>% filter(abs(t) >= 1.96) %>% count()
+
+top_1_geno_0 %>% filter(P.Value_old <= 0.05) %>% count()
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+
+# number of DE genes is reduced after eBayes!
+
+```
+
+#####
+both sexes, no blocking, quantile normalized across 
+```{r genotype_cleanup}
+#retreive remaining rownames after excluding F-1, three F0 genotypes, and males
+mini <-  which(
+  pData(eset)$generation != "F-1" & #using filter() instead of subset() does not preserve rownames
+    # pData(eset)$generation != "F0 + F1" &
+    pData(eset)$genotype   != "cyo/+; dilp3/+" & 
+    pData(eset)$genotype   != "rpr/+; ser/+" & 
+    pData(eset)$genotype   != "rpr/+; dilp3/+"
+  # pData(eset)$genotype   != "rpr/cyo; dilp3/ser" &
+  # pData(eset)$sex        != "female" &
+  # pData(eset)$sex        != "male"
+)
+#use the rownames object `mini` to perform the actual subsetting
+eset_mini <- eset[ , mini] #ExpressionSet objects cannot be subset with filter() or subset()
+remove(mini)
+
+pData(eset_mini)$sex <- pData(eset_mini)$sex %>% droplevels()
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% droplevels()
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% droplevels()
+pData(eset_mini)$day <- pData(eset_mini)$day %>% droplevels()
+
+
+#convert the `generation` column to a character vector to allow downstream processing
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.character()
+
+# #identify the rows that contain the string "dilp3", signifying the F0 generation
+# generation_F0 <- pData(eset_mini)$genotype %>%
+#   str_which("dilp3")
+#
+# #change the `generation` of the rows identified above to "F0"
+# pData(eset_mini)[generation_F0, "generation"] <- "F0"
+
+#split the `generation` "F0 + F1" into F0 and F1
+pData(eset_mini) <- pData(eset_mini) %>% 
+  mutate(generation = 
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "F0", 
+                     genotype == "cyo/+; ser/+" ~ "F1", 
+                     genotype == "w1118" ~ "F1", 
+                     generation == "F2" ~ "F2", generation == "F3" ~ "F3"), 
+         genotype =  
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "test", 
+                     genotype == "cyo/+; ser/+" ~ "test", 
+                     genotype == "w1118" ~ "control",
+                     genotype == "test" ~ "test", 
+                     genotype == "control" ~ "control")
+  )
+
+#convert the `generation` column  back to a factor vecor
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.factor()
+
+#convert the `genotype` column to a character vector to allow downstream processing
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.character()
+
+#replace the `genotype` string `w1118` with the string `control`
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("w1118", "control")
+
+#replace the other `genotype` strings not matching the string 'control' using the lookahead regex (?!__)
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("^(?!control)(.*)$", "test")
+
+#convert the `genotype` column  back to a factor vecor
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.factor()
+
+```
+
+```{r no_blocking}
+# Create single variable "group"
+group <- with(pData(eset_mini), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_mini)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_mini))
+colnames(design_1) <- levels(pData(eset_mini)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_mini, design_1)
+
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+# results_1_geno <- decideTests(fit2_model_1)
+# summary(results_1_geno)
+# 
+# # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+# vennDiagram(results_1_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+ 
+# hist(top_1_geno_3$t, breaks = seq(from = -2, to = 2, by = 0.1))
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+# 2139
+```
+2139
+
+#####
+both sexes, blocking, quantile normalized across 
+```{r blocking}
+# Create single variable "group"
+group <- with(pData(eset_mini), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_mini)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_mini))
+colnames(design_1) <- levels(pData(eset_mini)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+group2 <- with(pData(eset_mini), 
+               paste(replicate, 
+                     day, 
+                     sep = "."))
+pData(eset_mini)$group2 <- as.factor(group2)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$group2)
+corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+fit_model_1 <- lmFit(eset_mini, design_1, 
+                     block =  pData(eset_mini)$group2, 
+                     correlation = corfit_1$consensus)
+
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+top_1_geno_1 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_1 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+top_1_geno_2 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_2 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+top_1_geno_3 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_3 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+
+# 4159
+
+```
+4159
+
+#####
+only females, no blocking, quantile normalized across 
+```{r genotype_cleanup}
+#retreive remaining rownames after excluding F-1, three F0 genotypes, and males
+mini <-  which(
+  pData(eset)$generation != "F-1" & #using filter() instead of subset() does not preserve rownames
+    # pData(eset)$generation != "F0 + F1" &
+    pData(eset)$genotype   != "cyo/+; dilp3/+" & 
+    pData(eset)$genotype   != "rpr/+; ser/+" & 
+    pData(eset)$genotype   != "rpr/+; dilp3/+" &
+  # pData(eset)$genotype   != "rpr/cyo; dilp3/ser" &
+  # pData(eset)$sex        != "female" &
+  pData(eset)$sex        != "male"
+)
+#use the rownames object `mini` to perform the actual subsetting
+eset_mini <- eset[ , mini] #ExpressionSet objects cannot be subset with filter() or subset()
+remove(mini)
+
+pData(eset_mini)$sex <- pData(eset_mini)$sex %>% droplevels()
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% droplevels()
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% droplevels()
+pData(eset_mini)$day <- pData(eset_mini)$day %>% droplevels()
+
+
+#convert the `generation` column to a character vector to allow downstream processing
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.character()
+
+# #identify the rows that contain the string "dilp3", signifying the F0 generation
+# generation_F0 <- pData(eset_mini)$genotype %>%
+#   str_which("dilp3")
+#
+# #change the `generation` of the rows identified above to "F0"
+# pData(eset_mini)[generation_F0, "generation"] <- "F0"
+
+#split the `generation` "F0 + F1" into F0 and F1
+pData(eset_mini) <- pData(eset_mini) %>% 
+  mutate(generation = 
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "F0", 
+                     genotype == "cyo/+; ser/+" ~ "F1", 
+                     genotype == "w1118" ~ "F1", 
+                     generation == "F2" ~ "F2", generation == "F3" ~ "F3"), 
+         genotype =  
+           case_when(genotype == "rpr/cyo; dilp3/ser" ~ "test", 
+                     genotype == "cyo/+; ser/+" ~ "test", 
+                     genotype == "w1118" ~ "control",
+                     genotype == "test" ~ "test", 
+                     genotype == "control" ~ "control")
+  )
+
+#convert the `generation` column  back to a factor vecor
+pData(eset_mini)$generation <- pData(eset_mini)$generation %>% as.factor()
+
+#convert the `genotype` column to a character vector to allow downstream processing
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.character()
+
+#replace the `genotype` string `w1118` with the string `control`
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("w1118", "control")
+
+#replace the other `genotype` strings not matching the string 'control' using the lookahead regex (?!__)
+# pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% str_replace("^(?!control)(.*)$", "test")
+
+#convert the `genotype` column  back to a factor vecor
+pData(eset_mini)$genotype <- pData(eset_mini)$genotype %>% as.factor()
+
+```
+
+```{r no_blocking}
+# Create single variable "group"
+group <- with(pData(eset_mini), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_mini)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_mini))
+colnames(design_1) <- levels(pData(eset_mini)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_mini, design_1)
+
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+# results_1_geno <- decideTests(fit2_model_1)
+# summary(results_1_geno)
+# 
+# # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+# vennDiagram(results_1_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+ 
+# hist(top_1_geno_3$t, breaks = seq(from = -2, to = 2, by = 0.1))
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+# 1664
+```
+1664
+
+#####
+only females, blocking, quantile normalized across 
+```{r blocking}
+# Create single variable "group"
+group <- with(pData(eset_mini), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_mini)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_mini))
+colnames(design_1) <- levels(pData(eset_mini)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+group2 <- with(pData(eset_mini), 
+               paste(replicate, 
+                     day, 
+                     sep = "."))
+pData(eset_mini)$group2 <- as.factor(group2)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$group2)
+corfit_1$consensus
+
+#fit the linear model fit_model_1 with blocking
+fit_model_1 <- lmFit(eset_mini, design_1, 
+                     block =  pData(eset_mini)$group2, 
+                     correlation = corfit_1$consensus)
+
+cm_1_genotype_simple <- makeContrasts(
+  gen_1_geno = (F1.test - F1.control),
+  gen_2_geno = (F2.test - F2.control),
+  gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+top_1_geno_1 <- topTable(fit2_model_1,
+                  coef=c(1),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_2 <- topTable(fit2_model_1,
+                  coef=c(2),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_3 <- topTable(fit2_model_1,
+                  coef=c(3),
+                  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(4), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+# 3120
+```
+3120
+
+
+
+
+#####
+both sexes, no blocking, quantile normalized within 
+```{r qnormed_within}
+#import_CEL
+raw_data <- ReadAffy(celfile.path = "./CEL Files")
+
+#import_anno
+sample_data <- read_csv(
+  "sample_data.csv", 
+  col_types = cols(
+    age = col_integer(), 
+    day = col_factor(levels = c("1", "2", "3", "4", "5", "6")), 
+    generation = col_factor(levels = c("F-1", "F0 + F1", "F2", "F3")), 
+    module = col_factor(levels = c("1", "2", "3", "4")), 
+    number = col_integer(), 
+    replicate = col_factor(levels = c("L3", "L4", "L5", "L7", "L8", "L9", "L10")), 
+    sex = col_factor(levels = c("female", "male")), 
+    stored = col_date(format = "%m/%d/%Y"), 
+    wash = col_factor(levels = c("1", "2", "3", "4")),
+    genotype = col_factor(levels = c(
+      "control",  "test", "w1118", "rpr/cyo; dilp3/ser", "cyo/+; ser/+", "rpr/+; dilp3/+", "cyo/+; dilp3/+", "rpr/+; ser/+"))))
+
+#assign_anno
+phenoData(raw_data) <- AnnotatedDataFrame(sample_data)
+
+#rename_sample
+sampleNames(raw_data) <- sample_data$label
+
+# keep only generation F0 females
+keep <- which(pData(raw_data)$generation == "F0 + F1"
+              & (pData(raw_data)$genotype == "rpr/cyo; dilp3/ser" | pData(raw_data)$genotype == "w1118")
+              )
+
+raw_data <- raw_data[ , keep] #ExpressionSet objects cannot be subset with filter() or filter()  
+
+# drop empty levels
+pData(raw_data)$generation <- pData(raw_data)$generation %>% droplevels()
+
+# subsetting an AffyBatch object removes row names so they need be reassigned
+sampleNames(raw_data) <- pData(raw_data)$label
+
+# cleanup factor levels
+pData(raw_data)$generation <- pData(raw_data) %>% transmute(
+generation = case_when( # convert F-1 and the "F0" in "F0 + F1" into F0
+      genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+      TRUE ~ "F1") %>% as_factor()) %>% pluck(1)
+
+pData(raw_data)$genotype <- pData(raw_data) %>% transmute(
+genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      TRUE    ~ "control") %>% as_factor()) %>% pluck(1)
+
+sampleNames(raw_data) <- pData(raw_data)$label
+
+#check_object
+validObject(raw_data)
+
+#gcrma
+eset <- gcrma(raw_data)
+```
+
+```{r no_blocking}
+# Create single variable "group"
+group <- with(pData(eset), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset))
+colnames(design_1) <- levels(pData(eset)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset, design_1)
+
+cm_1_genotype_simple <- makeContrasts(
+  # gen_1_geno = (F1.test - F1.control),
+  # gen_2_geno = (F2.test - F2.control),
+  # gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+# results_1_geno <- decideTests(fit2_model_1)
+# summary(results_1_geno)
+# 
+# # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+# vennDiagram(results_1_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+# top_1_geno_1 <- topTable(fit2_model_1,
+#                   coef=c(1),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_2 <- topTable(fit2_model_1,
+#                   coef=c(2),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_3 <- topTable(fit2_model_1,
+#                   coef=c(3),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(1), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+ 
+# hist(top_1_geno_3$t, breaks = seq(from = -2, to = 2, by = 0.1))
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+```
+680
+
+#####
+both sexes, blocking, quantile normalized within 
+```{r blocking}
+# Create single variable "group"
+group <- with(pData(eset), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset))
+colnames(design_1) <- levels(pData(eset)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+group2 <- with(pData(eset), 
+               paste(replicate, 
+                     day, 
+                     sep = "."))
+pData(eset)$group2 <- as.factor(group2)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_1 <- duplicateCorrelation(eset, design_1, block =  pData(eset)$group2)
+corfit_1$consensus
+
+#fit the linear model fit_model_1 with blocking
+fit_model_1 <- lmFit(eset, design_1, 
+                     block =  pData(eset)$group2, 
+                     correlation = corfit_1$consensus)
+
+cm_1_genotype_simple <- makeContrasts(
+  # gen_1_geno = (F1.test - F1.control),
+  # gen_2_geno = (F2.test - F2.control),
+  # gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+# top_1_geno_1 <- topTable(fit2_model_1,
+#                   coef=c(1),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_2 <- topTable(fit2_model_1,
+#                   coef=c(2),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_3 <- topTable(fit2_model_1,
+#                   coef=c(3),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(1), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+# 3120
+```
+1551
+
+#####
+only females, no blocking, quantile normalized within 
+```{r qnormed_within}
+#import_CEL
+raw_data <- ReadAffy(celfile.path = "./CEL Files")
+
+#import_anno
+sample_data <- read_csv(
+  "sample_data.csv", 
+  col_types = cols(
+    age = col_integer(), 
+    day = col_factor(levels = c("1", "2", "3", "4", "5", "6")), 
+    generation = col_factor(levels = c("F-1", "F0 + F1", "F2", "F3")), 
+    module = col_factor(levels = c("1", "2", "3", "4")), 
+    number = col_integer(), 
+    replicate = col_factor(levels = c("L3", "L4", "L5", "L7", "L8", "L9", "L10")), 
+    sex = col_factor(levels = c("female", "male")), 
+    stored = col_date(format = "%m/%d/%Y"), 
+    wash = col_factor(levels = c("1", "2", "3", "4")),
+    genotype = col_factor(levels = c(
+      "control",  "test", "w1118", "rpr/cyo; dilp3/ser", "cyo/+; ser/+", "rpr/+; dilp3/+", "cyo/+; dilp3/+", "rpr/+; ser/+"))))
+
+#assign_anno
+phenoData(raw_data) <- AnnotatedDataFrame(sample_data)
+
+#rename_sample
+sampleNames(raw_data) <- sample_data$label
+
+# keep only generation F0 females
+keep <- which(pData(raw_data)$sex == "female" & pData(raw_data)$generation == "F0 + F1"
+              & (pData(raw_data)$genotype == "rpr/cyo; dilp3/ser" | pData(raw_data)$genotype == "w1118")
+              )
+
+raw_data <- raw_data[ , keep] #ExpressionSet objects cannot be subset with filter() or filter()  
+
+# drop empty levels
+pData(raw_data)$generation <- pData(raw_data)$generation %>% droplevels()
+
+# subsetting an AffyBatch object removes row names so they need be reassigned
+sampleNames(raw_data) <- pData(raw_data)$label
+
+# cleanup factor levels
+pData(raw_data)$generation <- pData(raw_data) %>% transmute(
+generation = case_when( # convert F-1 and the "F0" in "F0 + F1" into F0
+      genotype == "rpr/cyo; dilp3/ser" ~ "F0",
+      TRUE ~ "F1") %>% as_factor()) %>% pluck(1)
+
+pData(raw_data)$genotype <- pData(raw_data) %>% transmute(
+genotype = case_when( # convert all non-transgenic lineages into w1118 genotype
+      genotype == "rpr/cyo; dilp3/ser" ~ "test",
+      TRUE    ~ "control") %>% as_factor()) %>% pluck(1)
+
+sampleNames(raw_data) <- pData(raw_data)$label
+
+#check_object
+validObject(raw_data)
+
+#gcrma
+eset <- gcrma(raw_data)
+```
+
+```{r no_blocking}
+# Create single variable "group"
+group <- with(pData(eset), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset))
+colnames(design_1) <- levels(pData(eset)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset, design_1)
+
+cm_1_genotype_simple <- makeContrasts(
+  # gen_1_geno = (F1.test - F1.control),
+  # gen_2_geno = (F2.test - F2.control),
+  # gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+# results_1_geno <- decideTests(fit2_model_1)
+# summary(results_1_geno)
+# 
+# # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+# vennDiagram(results_1_geno)
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+# top_1_geno_1 <- topTable(fit2_model_1,
+#                   coef=c(1),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_2 <- topTable(fit2_model_1,
+#                   coef=c(2),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_3 <- topTable(fit2_model_1,
+#                   coef=c(3),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(1), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+ 
+# hist(top_1_geno_3$t, breaks = seq(from = -2, to = 2, by = 0.1))
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+```
+456
+
+#####
+only females, blocking, quantile normalized within 
+```{r blocking}
+# Create single variable "group"
+group <- with(pData(eset), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset))
+colnames(design_1) <- levels(pData(eset)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+group2 <- with(pData(eset), 
+               paste(replicate, 
+                     day, 
+                     sep = "."))
+pData(eset)$group2 <- as.factor(group2)
+
+#estimate the correlation between measurements made on the same repliactes:
+corfit_1 <- duplicateCorrelation(eset, design_1, block =  pData(eset)$group2)
+corfit_1$consensus
+
+#fit the linear model fit_model_1 with blocking
+fit_model_1 <- lmFit(eset, design_1, 
+                     block =  pData(eset)$group2, 
+                     correlation = corfit_1$consensus)
+
+cm_1_genotype_simple <- makeContrasts(
+  # gen_1_geno = (F1.test - F1.control),
+  # gen_2_geno = (F2.test - F2.control),
+  # gen_3_geno = (F3.test - F3.control), 
+  gen_0_geno = (F0.test - F1.control),
+  levels = design_1)
+
+cm_1_genotype_simple
+
+#filter out probes with an average expression level below 3
+keep <- fit_model_1$Amean > 0 #`Amean` stores the average log expression values
+fit2_model_1 <- fit_model_1[keep, ] 
+nrow(fit2_model_1)
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit2_model_1, cm_1_genotype_simple)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+fit2_model_1 <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+# top_1_geno_1 <- topTable(fit2_model_1,
+#                   coef=c(1),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_2 <- topTable(fit2_model_1,
+#                   coef=c(2),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+# 
+# top_1_geno_3 <- topTable(fit2_model_1,
+#                   coef=c(3),
+#                   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 <- topTable(fit2_model_1, 
+                         coef = c(1), 
+                         adjust = "BH", number = nrow(fit2_model_1), sort.by = "none")
+
+top_1_geno_0 %>% filter(P.Value <= 0.05) %>% count()
+top_1_geno_0 %>% filter(adj.P.Val <= 0.05) %>% count()
+
+# 2680
+```
+739
+
+```{r}
+data.frame(
+  Levels = 1:8 %>% as.character(),
+  Hits = c(456L, 680L, 739L, 1551L, 1664L, 2139L, 3120L, 4159L)) %>% 
+  ggplot(data = ., aes(x = Levels, y = Hits)) + 
+  geom_bar(stat = "identity") +
+  theme_classic()
+```
+
+```{r}
+data.frame(
+
+
+        `2139.210` = c("4159 1393","1664 104",
+                       "3120 366","680 38","1551 140","456 0","739 0")
+)
+```
 
