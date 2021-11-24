@@ -1,6 +1,6 @@
 #both sexes, quantile normalized across 
 group2 <- with(pData(eset_mini), 
-               paste(sex, 
+               paste(replicate, 
                      day,
                      sep = "."))
 pData(eset_mini)$group2 <- as.factor(group2)
@@ -9,9 +9,24 @@ corfit_1$consensus
 [1] 0.6202567 #12 warnings
 
 
-corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$replicate)
+group2 <- with(pData(eset_mini), 
+               paste(sex, 
+                     replicate,
+                     sep = "."))
+pData(eset_mini)$group2 <- as.factor(group2)
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$group2)
 corfit_1$consensus
-[1] -0.005883273
+[1] 0.6202567 #23 warnings
+
+
+group2 <- with(pData(eset_mini), 
+               paste(sex, 
+                     day,
+                     sep = "."))
+pData(eset_mini)$group2 <- as.factor(group2)
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$group2)
+corfit_1$consensus
+[1] 0.4487796
 
 
 corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$day)
@@ -22,6 +37,11 @@ corfit_1$consensus
 corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$sex)
 corfit_1$consensus
 [1] 0.4763534
+
+
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$replicate)
+corfit_1$consensus
+[1] -0.005883273
 
 
 
