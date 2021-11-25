@@ -633,7 +633,7 @@ hist(f3_m$P.Value)
 #annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
 anno_eset <- AnnotationDbi::select(drosophila2.db,
                                        keys = (featureNames(eset_f3_m)), #indexes the rows
-                                       columns = c("SYMBOL", "GENENAME"), #indexes the columns
+                                       columns = c("SYMBOL", "GENENAME", "ENTREZID"), #indexes the columns
                                        keytype = "PROBEID") %>% #arranges the output by this column
   filter(!is.na(SYMBOL)) %>% # this also removes quality control probes
   group_by(PROBEID) %>%
@@ -647,34 +647,34 @@ anno_eset <- AnnotationDbi::select(drosophila2.db,
 library(fdrtool)
 
 #####
-rpr.cyo_dilp3.ser_f <- (rpr.cyo_dilp3.ser_f$t - median(rpr.cyo_dilp3.ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr.cyo_dilp3.ser_f <- (rpr.cyo_dilp3.ser_f$t - median(rpr.cyo_dilp3.ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_ser_f <- (cyo_ser_f$t - median(cyo_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+cyo_ser_f <- (cyo_ser_f$t - median(cyo_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_dilp3_f <- (rpr_dilp3_f$t - median(rpr_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr_dilp3_f <- (rpr_dilp3_f$t - median(rpr_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_dilp3_f <- (cyo_dilp3_f$t - median(cyo_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+cyo_dilp3_f <- (cyo_dilp3_f$t - median(cyo_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_ser_f <- (rpr_ser_f$t - median(rpr_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr_ser_f <- (rpr_ser_f$t - median(rpr_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
 #####
-rpr.cyo_dilp3.ser_m <- (rpr.cyo_dilp3.ser_m$t - median(rpr.cyo_dilp3.ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr.cyo_dilp3.ser_m <- (rpr.cyo_dilp3.ser_m$t - median(rpr.cyo_dilp3.ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_ser_m <- (cyo_ser_m$t - median(cyo_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+cyo_ser_m <- (cyo_ser_m$t - median(cyo_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_dilp3_m <- (rpr_dilp3_m$t - median(rpr_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr_dilp3_m <- (rpr_dilp3_m$t - median(rpr_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-cyo_dilp3_m <- (cyo_dilp3_m$t - median(cyo_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+cyo_dilp3_m <- (cyo_dilp3_m$t - median(cyo_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 
-rpr_ser_m <- (rpr_ser_m$t - median(rpr_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+rpr_ser_m <- (rpr_ser_m$t - median(rpr_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f2_f <- (f2_f$t - median(f2_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+f2_f <- (f2_f$t - median(f2_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f2_m <- (f2_m$t - median(f2_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+f2_m <- (f2_m$t - median(f2_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f3_f <- (f3_f$t - median(f3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+f3_f <- (f3_f$t - median(f3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 #####
-f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME) %>% select("probe_id", "symbol", "gene_name", "logFC", "pval", "qval") #  %>% drop_na()
+f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
 ```
 
 ```{r write_files}
@@ -720,34 +720,87 @@ saveWorkbook(by_generation2.4, "by_generation2.4.xlsx")
 by_generation <- NULL
 by_generation <- by_generation %>% as_tibble()
 
-by_generation[1,1] <- rpr.cyo_dilp3.ser_f %>% filter(pval <= 0.05) %>% count()
-by_generation[2,1] <- cyo_ser_f %>% filter(pval <= 0.05) %>% count()
-by_generation[3,1] <- rpr_dilp3_f %>% filter(pval <= 0.05) %>% count()
-by_generation[4,1] <- cyo_dilp3_f %>% filter(pval <= 0.05) %>% count()
-by_generation[5,1] <- rpr_ser_f %>% filter(pval <= 0.05) %>% count()
-by_generation[6,1] <- f2_f %>% filter(pval <= 0.05) %>% count()
-by_generation[7,1] <- f3_f %>% filter(pval <= 0.05) %>% count()
+by_generation[1,1] <- rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[2,1] <- cyo_ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[3,1] <- rpr_dilp3_f %>% filter(qval <= 0.05) %>% count()
+by_generation[4,1] <- cyo_dilp3_f %>% filter(qval <= 0.05) %>% count()
+by_generation[5,1] <- rpr_ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[6,1] <- f2_f %>% filter(qval <= 0.05) %>% count()
+by_generation[7,1] <- f3_f %>% filter(qval <= 0.05) %>% count()
 
-by_generation <- by_generation %>% rename(females_unblocked = n)
+by_generation <- by_generation %>% rename(female = n)
 by_generation$data <- c(
-  "rpr.cyo_dilp3.ser_f",
-  "cyo_ser_f",
-  "rpr_dilp3_f",
-  "cyo_dilp3_f",
-  "rpr_ser_f", 
-  "f2_f", 
-  "f3_f"
+  "rpr.cyo_dilp3.ser",
+  "cyo_ser",
+  "rpr_dilp3",
+  "cyo_dilp3",
+  "rpr_ser", 
+  "f2", 
+  "f3"
 )
+
+by_generation$male <- 0
+
+by_generation[1,3] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[2,3] <- cyo_ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[3,3] <- rpr_dilp3_m %>% filter(qval <= 0.05) %>% count()
+by_generation[4,3] <- cyo_dilp3_m %>% filter(qval <= 0.05) %>% count()
+by_generation[5,3] <- rpr_ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[6,3] <- f2_m %>% filter(qval <= 0.05) %>% count()
+by_generation[7,3] <- f3_m %>% filter(qval <= 0.05) %>% count()
+
+by_generation <- by_generation %>% pivot_longer(!data, names_to = "sex", values_to = "count") %>% 
+filter(sex == "male" | data == "rpr.cyo_dilp3.ser") %>% 
+mutate(generation = case_when(data == "rpr.cyo_dilp3.ser" ~ "F0",
+                              data == "cyo_ser" ~ "F1.1",
+                              data == "rpr_dilp3" ~ "F1.2",
+                              data == "cyo_dilp3" ~ "F1.3",
+                              data == "rpr_ser" ~ "F1.4",
+                              data == "f2" ~ "F2",
+                              data == "f3" ~ "F3"),
+       sex = case_when(sex == "female" ~ "f",
+                       sex == "male" ~ "m")
+       ) 
+
+by_generation$group <- with(by_generation, 
+                            paste(generation,
+                                  sex, 
+                                  sep = "_")) %>% as.factor()
+
+by_generation %>% 
+  ggplot(aes(x = group, y = count)) + geom_col() + 
+   # facet_grid(sex ~ .) +
+    ylim(0,4000) +
+    ylab("DE Count") +
+  xlab("Generations") +
+  theme_classic()
+  
+  
+tribble(
+       ~group, ~count, ~generation, ~sex, ~data,
+  "F2_v_F1_m",     64, "F2_v_F1", "m", "control",
+  "F3_v_F2_m",      0, "F3_v_F2", "m", "control",
+  "F3_v_F1_m",    191, "F3_v_F1", "m", "control",
+  "F2_v_F1_F",      3, "F2_v_F1", "f", "control",
+  "F3_v_F2_F",      0, "F3_v_F2", "f", "control",
+  "F3_v_F1_F",      1, "F3_v_F1", "f", "control",
+) %>% select(data, sex, count, generation, group) %>% 
+  ggplot(aes(x = group, y = count)) + geom_col() + 
+    ylim(0,4000) +
+   # facet_grid(sex ~ .) +
+  ylab("DE Count") +
+  xlab("Generations") +
+  theme_classic()
 
 ```
 
 ```{r volcano_plots}
-bind_rows("F0" = geno_0 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
-          "F1" = geno_1 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
-          "F2" = geno_2 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
-          "F3" = geno_3 %>% left_join(anno_eset, by = c("rowname" = "PROBEID")), 
+bind_rows("F0" = rpr.cyo_dilp3.ser_m, 
+          "F1" = cyo_ser_m, 
+          "F2" = f2_m, 
+          "F3" = f3_m, 
           .id = "generation") %>% 
-  mutate(colo = case_when(pval <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
+  mutate(colo = case_when(qval <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
   ggplot(aes(x = logFC, y = -log(pval, 10), colour = colo)) +
   geom_point(shape= 20) + 
   # xlim(-2,2) +
@@ -777,3 +830,99 @@ venn.diagram(
         output=TRUE)
 
 ```
+
+```{r venn_diagrams_2}
+
+by_generation$overlap <- 0
+
+by_generation[2,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[3,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+cyo_ser_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[4,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr_dilp3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[5,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+cyo_dilp3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[6,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr_ser_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[7,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+f2_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[8,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+f3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+write.csv(by_generation, "output.csv", row.names=FALSE, quote=FALSE) 
+
+group1 = 1812
+group2 = c(2489, 1335L, 1639L, 1984L, 2431L, 3504L, 1375L)
+overlap = c(484L, 583L, 471L, 546L, 676L, 312L, 189L)
+total = 14430
+
+# Test for over-representation (enrichment)
+# phyper(Overlap-1, group1, total-group1, group2,lower.tail= FALSE)
+# q, m, n, k
+# phyper(Overlap-1, group2, Total-group2, group1,lower.tail= FALSE)
+
+pmap_dbl(list(q =  overlap - 1, m = group2, n = total - group2, k = group1, lower.tail= FALSE), phyper)
+
+data.frame(
+  stringsAsFactors = FALSE,
+       check.names = FALSE,
+             group = c("F0_m","F0_f","F1.1_m",
+                       "F1.2_m","F1.3_m","F1.4_m","F2_m","F3_m"),
+           count = c(1812L, 484L, 583L, 471L, 546L, 676L, 312L, 189L),
+         `p-value` = c(NA,1.48e-27,2.03e-202,
+                       3.58e-79,6.82e-86,4.76e-114,1,0.08),
+              type = c("original DE","overlap DE",
+                       "overlap DE","overlap DE","overlap DE","overlap DE",
+                       "overlap DE","overlap DE")
+  ) %>%  mutate(group = fct_relevel(group, 
+            "F0_m","F0_f","F1.1_m",
+                       "F1.2_m","F1.3_m","F1.4_m","F2_m","F3_m")) %>% 
+    ggplot(aes(x = group, y = count/1812, fill = type)) + geom_col() + geom_text(aes(label=`p-value`), position=position_dodge(width=0.9), vjust=-0.25)+ theme_classic() + theme(legend.position = "none") + ylab("DE Overlap") + xlab("Generations")
+  
+```
+
+
+```{r upset}
+rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(-c(5:7)) %>%
+  full_join(
+cyo_ser_f %>% mutate(cyo_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
+  full_join(
+rpr_dilp3_f %>% mutate(rpr_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
+  full_join(
+# cyo_dilp3_f %>% mutate(cyo_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
+  # full_join(
+# rpr_ser_f %>% mutate(rpr_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
+  # full_join(
+f2_f %>% mutate(f2_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>% 
+  full_join(
+f3_f %>% mutate(f3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") -> test
+
+test %>% 
+  # drop_na() %>%
+  # mutate(sum = rowSums(.[5:9])) %>% filter(sum != 0) %>% select(-c(1:4, 10)) %>%
+  upset(
+    # order.by = "freq"
+    )
+```
+

@@ -1,0 +1,9 @@
+data,sex,count,generation,group,overlap
+rpr.cyo_dilp3.ser,f,2489,F0,F0_f,0
+rpr.cyo_dilp3.ser,m,1812,F0,F0_m,484
+cyo_ser,m,1335,F1.1,F1.1_m,583
+rpr_dilp3,m,1639,F1.2,F1.2_m,471
+cyo_dilp3,m,1984,F1.3,F1.3_m,546
+rpr_ser,m,2431,F1.4,F1.4_m,676
+f2,m,3504,F2,F2_m,312
+f3,m,1375,F3,F3_m,189
