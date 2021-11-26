@@ -1,6 +1,6 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output: html_document
 ---
 
 0. correct geo submission
@@ -12,8 +12,9 @@ output: html_notebook
 [] TAG glmm
 [] Pathway analysis [GO analysis]
 
-[] Number of DE genes in each generation; also, control-vs-control
-[] Overlap between lists of DE genes (gene set enrichment)
+[x] Number of DE genes in each generation; also, control-vs-control
+[x] Overlap between lists of DE genes
+[]  Gene set enrichment analysis [read about options in limma reference manua "10.GeneSetTests"]
 [] correlation of logFC values between DE in different lists
 [] above with Manoj's data
 
