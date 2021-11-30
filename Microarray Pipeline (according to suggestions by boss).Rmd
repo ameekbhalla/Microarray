@@ -926,3 +926,50 @@ test %>%
     )
 ```
 
+```{r deg_correlation}
+#correlation between the logFC values of DE genes that are common between different genotype pairs
+
+#function for finding correlation between DEGs found in different pairs
+correlate_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
+               ) %>% 
+  {cor.test(.$logFC1, .$logFC2)} %>% tidy()
+#the curly brackets are needed to suppress the default behavior of the pipe operator, otherwise the data frame to the left of the pipe would have been forwarded as the third argument into cor(), which only takes two arguments.
+}
+
+#how to list all objects of a particular class from the local environment
+df_list <- ls()[map_lgl(
+  ls(), #lists the the objects in the local environment
+  ~ get(.) %>% #1st action in the anonymous function; accesses an object from the local environment
+    {is.data.frame(.) & !is_tibble(.)} #2nd action in anonymous function; makes sure class of accessed object is df but not a tibble
+  )
+                ] 
+
+#run the correlate_degs() function on all the dfs in the environment
+map2_df(.x = "rpr.cyo_dilp3.ser_m",
+         .y = df_list,
+         .f = correlate_degs
+           ) %>% bind_cols(df_list %>% tibble(group = .))
+
+#function for finding DEGs that overlap within different pairs
+join_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
+    ) %>% mutate(group = expr_label(df2))
+  }
+
+#run the common degs() function on all the dfs in the environment
+map2_dfr(.x = "rpr.cyo_dilp3.ser_m",
+         .y = df_list,
+     .f = join_degs
+           ) %>% ggplot(aes(logFC1, logFC2)) + 
+  geom_point() + 
+  geom_abline(linetype = "dotted") +
+  facet_wrap(~group, nrow = 2) + 
+  # theme_classic() + 
+  theme(aspect.ratio = 1) 
+```
+
