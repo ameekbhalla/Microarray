@@ -926,3 +926,19 @@ test %>%
     )
 ```
 
+```{r correlations}
+#correlation between the logFC of DE genes
+
+test1 <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("qval")
+test2 <- rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("qval")  
+
+library(MASS)
+
+boxcox(lm(test1 ~ test2))
+#this suggests that the seventh root or eight root transformation might be good for normalizing the data
+
+#the data is still not linear
+ggplot(data = test3, aes((qval.1)^(1/8), (qval.2)^(1/8))) + geom_point() 
+
+```
+
