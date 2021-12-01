@@ -926,6 +926,7 @@ test %>%
     )
 ```
 
+<<<<<<< HEAD
 ```{r deg_correlation}
 #correlation between the logFC values of DE genes that are common between different genotype pairs
 
@@ -971,5 +972,21 @@ map2_dfr(.x = "rpr.cyo_dilp3.ser_m",
   facet_wrap(~group, nrow = 2) + 
   # theme_classic() + 
   theme(aspect.ratio = 1) 
+=======
+```{r correlations}
+#correlation between the logFC of DE genes
+
+test1 <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("qval")
+test2 <- rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("qval")  
+
+library(MASS)
+
+boxcox(lm(test1 ~ test2))
+#this suggests that the seventh root or eight root transformation might be good for normalizing the data
+
+#the data is still not linear
+ggplot(data = test3, aes((qval.1)^(1/8), (qval.2)^(1/8))) + geom_point() 
+
+>>>>>>> cc5968c184747fdf6fd4e1f0e6c3b07619986ed6
 ```
 
