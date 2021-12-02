@@ -926,7 +926,6 @@ test %>%
     )
 ```
 
-<<<<<<< HEAD
 ```{r deg_correlation}
 #correlation between the logFC values of DE genes that are common between different genotype pairs
 
@@ -936,7 +935,7 @@ correlate_degs <- function(df1, df2){
     inner_join(
   df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
                ) %>% 
-  {cor.test(.$logFC1, .$logFC2)} %>% tidy()
+  {cor.test(.$logFC1, .$logFC2)} %>% broom::tidy()
 #the curly brackets are needed to suppress the default behavior of the pipe operator, otherwise the data frame to the left of the pipe would have been forwarded as the third argument into cor(), which only takes two arguments.
 }
 
@@ -959,34 +958,76 @@ join_degs <- function(df1, df2){
   df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
     inner_join(
   df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
-    ) %>% mutate(group = expr_label(df2))
+    ) %>% mutate(group2 = rlang::expr_label(df2))
   }
 
-#run the common degs() function on all the dfs in the environment
-map2_dfr(.x = "rpr.cyo_dilp3.ser_m",
+#run the  join_degs() function on all the dfs in the environment
+map2_df(.x = "rpr.cyo_dilp3.ser_m",
          .y = df_list,
-     .f = join_degs
-           ) %>% ggplot(aes(logFC1, logFC2)) + 
-  geom_point() + 
+     .f = join_degs,
+     .id = "ref"
+           ) %>% 
+    mutate(
+      group = case_when(
+        ref == "9"  |ref == "10" ~ "F0 \n rpr.cyo_dilp3.ser",
+        ref == "3"  |ref == "4"~"F1 \n cyo_ser",
+        ref == "11" |ref == "12"~"F1 \n rpr_dilp3",
+        ref == "1"  |ref == "2"~"F1 \n cyo_dilp3",
+        ref == "13" |ref == "14"~"F1 \n rpr_ser",
+        ref == "5"  |ref == "6"~"F2",
+        ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+      group = fct_relevel(group, 
+                          "F0 \n rpr.cyo_dilp3.ser", 
+                          "F1 \n cyo_ser", "F1 \n rpr_dilp3", "F1 \n cyo_dilp3", "F1 \n rpr_ser",
+                          "F2", 
+                          "F3"
+                          ),
+    generation = case_when(
+      group == "F0 \n rpr.cyo_dilp3.ser"~ "F0",
+      group == "F1 \n cyo_ser" ~ "F1",
+      group == "F1 \n rpr_dilp3"  ~ "F1",
+      group == "F1 \n cyo_dilp3" ~ "F1",
+      group == "F1 \n rpr_ser" ~ "F1",
+      group == "F2" ~ "F2",
+      group == "F3" ~ "F3") %>% as_factor(),
+    generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+# the last two variables but without the line break in the group name
+    # group = case_when(
+    #   ref == "9"  |ref == "10" ~ "rpr.cyo_dilp3.ser",
+    #   ref == "3"  |ref == "4"~"cyo_ser",
+    #   ref == "11" |ref == "12"~"rpr_dilp3",
+    #   ref == "1"  |ref == "2"~"cyo_dilp3",
+    #   ref == "13" |ref == "14"~"rpr_ser",
+    #   ref == "5"  |ref == "6"~"F2",
+    #   ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+    # group = fct_relevel(group, "rpr.cyo_dilp3.ser", "cyo_ser", "rpr_dilp3", "cyo_dilp3", "rpr_ser", "F2", "F3"),
+    # generation = case_when(
+    #   group == "rpr.cyo_dilp3.ser"~ "F0",
+    #   group == "cyo_ser" ~ "F1",
+    #   group == "rpr_dilp3"  ~ "F1",
+    #   group == "cyo_dilp3" ~ "F1",
+    #   group == "rpr_ser" ~ "F1",
+    #   group == "F2" ~ "F2",
+    #   group == "F3" ~ "F3") %>% as_factor(),
+    # generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+    sex = case_when(
+      ref == "1"|ref == "3"|ref == "5"|ref == "7"|ref == "9"|ref == "11"|ref == "13" ~ "female",
+      TRUE ~ "male") %>% as_factor(),
+       ) %>% 
+  ggplot(aes(logFC1, logFC2, 
+             col = sex,
+             )) + 
+  geom_point(
+    alpha = 0.20,
+    shape = 1
+    ) + 
   geom_abline(linetype = "dotted") +
-  facet_wrap(~group, nrow = 2) + 
-  # theme_classic() + 
+  facet_grid(
+    . ~ group
+    # sex ~ group
+    # generation ~ group
+    ) +
+  theme_classic() +
   theme(aspect.ratio = 1) 
-=======
-```{r correlations}
-#correlation between the logFC of DE genes
-
-test1 <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("qval")
-test2 <- rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("qval")  
-
-library(MASS)
-
-boxcox(lm(test1 ~ test2))
-#this suggests that the seventh root or eight root transformation might be good for normalizing the data
-
-#the data is still not linear
-ggplot(data = test3, aes((qval.1)^(1/8), (qval.2)^(1/8))) + geom_point() 
-
->>>>>>> cc5968c184747fdf6fd4e1f0e6c3b07619986ed6
 ```
 
