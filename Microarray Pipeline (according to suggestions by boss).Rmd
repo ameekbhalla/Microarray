@@ -1022,12 +1022,14 @@ map2_df(.x = "rpr.cyo_dilp3.ser_m",
     shape = 1
     ) + 
   geom_abline(linetype = "dotted") +
-  facet_grid(
-    . ~ group
+  facet_wrap(
+    ~ group
     # sex ~ group
     # generation ~ group
     ) +
-  theme_classic() +
+  theme_bw() +
   theme(aspect.ratio = 1) 
+
+# in addition to the correlation plots; also generate overlapping density plots
 ```
 
