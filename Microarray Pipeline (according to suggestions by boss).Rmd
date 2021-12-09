@@ -904,35 +904,26 @@ data.frame(
 
 
 ```{r upset}
-rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(-c(5:7)) %>%
-  full_join(
-cyo_ser_f %>% mutate(cyo_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
-  full_join(
-rpr_dilp3_f %>% mutate(rpr_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
-  full_join(
-# cyo_dilp3_f %>% mutate(cyo_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
-  # full_join(
-# rpr_ser_f %>% mutate(rpr_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>%
-  # full_join(
-f2_f %>% mutate(f2_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") %>% 
-  full_join(
-f3_f %>% mutate(f3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0)) %>% select(c(1,8)), by = "probe_id") -> test
-
 library("ggupset")
-test %>% 
-  # drop_na() %>%
-  # mutate(sum = rowSums(.[5:9])) %>% filter(sum != 0) %>% select(-c(1:4, 10)) %>%
-  upset(
-    # order.by = "freq"
-    )
 
-test %>%   pivot_longer(!c(1:4), names_to = "group", values_to = "present") %>% mutate(group = group %>% as.list()) %>% 
-  drop_na() %>%
-  ggplot(aes(x=group)) +
-    geom_bar() +
-    geom_text(stat='count', aes(label=after_stat(count)), vjust=-1) +
-    scale_x_upset(n_intersections = 20) +
-    scale_y_continuous()
+rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(-c(5:7)) %>%
+  full_join(
+cyo_ser_f %>% mutate(cyo_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  full_join(
+# rpr_dilp3_f %>% mutate(rpr_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+# cyo_dilp3_f %>% mutate(cyo_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  # full_join(
+# rpr_ser_f %>% mutate(rpr_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  # full_join(
+f2_f %>% mutate(f2_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
+  full_join(
+f3_f %>% mutate(f3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
+  pivot_longer(!c(1:4), names_to = "group", values_to = "present") %>% 
+  group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>%
+  ggplot(aes(x = groups)) +
+  geom_bar() +
+  scale_x_upset()
 ```
 
 ```{r deg_correlation}
@@ -967,7 +958,7 @@ join_degs <- function(df1, df2){
   df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
     inner_join(
   df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
-    ) %>% mutate(group2 = rlang::expr_label(df2))
+    ) %>% mutate(group2 = rlang::expr_name(df2)) # adds the name of the df2 into the group2 column
   }
 
 #run the  join_degs() function on all the dfs in the environment
