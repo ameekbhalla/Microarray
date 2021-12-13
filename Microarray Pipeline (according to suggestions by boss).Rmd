@@ -921,7 +921,7 @@ f2_f %>% mutate(f2_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %
 f3_f %>% mutate(f3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
   pivot_longer(!c(1:4), names_to = "group", values_to = "present") %>% 
   group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>%
-  filter(map_dbl(.x = test$groups, length) >= 2) %>% #keep only rows which occur in two or more sets
+  filter(map_dbl(.x = .$groups, length) >= 2) %>% #keep only rows which occur in two or more sets
   ggplot(aes(x = groups)) +
   geom_bar() +
   scale_x_upset()
