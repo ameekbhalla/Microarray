@@ -906,21 +906,24 @@ data.frame(
 ```{r upset}
 library("ggupset")
 
-rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(-c(5:7)) %>%
+rpr.cyo_dilp3.ser_m %>% mutate(rpr.cyo_dilp3.ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(-c(5:7)) %>% 
   full_join(
-cyo_ser_f %>% mutate(cyo_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1, 8)), by = "probe_id") %>%
   full_join(
-# rpr_dilp3_f %>% mutate(rpr_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+cyo_ser_m %>% mutate(cyo_ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  full_join(
+# rpr_dilp3_m %>% mutate(rpr_dilp3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
 #   full_join(
-# cyo_dilp3_f %>% mutate(cyo_dilp3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
-  # full_join(
-# rpr_ser_f %>% mutate(rpr_ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
-  # full_join(
-f2_f %>% mutate(f2_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
+# cyo_dilp3_m %>% mutate(cyo_dilp3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+# rpr_ser_m %>% mutate(rpr_ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+f2_m %>% mutate(f2_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
   full_join(
-f3_f %>% mutate(f3_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
+f3_m %>% mutate(f3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  filter(rpr.cyo_dilp3.ser_m == TRUE) %>%
   pivot_longer(!c(1:4), names_to = "group", values_to = "present") %>% 
-  group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>%
+  group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>% 
   filter(map_dbl(.x = .$groups, length) >= 2) %>% #keep only rows which occur in two or more sets
   ggplot(aes(x = groups)) +
   geom_bar() +
