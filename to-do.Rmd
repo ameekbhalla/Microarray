@@ -15,7 +15,7 @@ output: html_document
 [x] Number of DE genes in each generation; also, control-vs-control
 [x] Overlap between lists of DE genes
 []  Gene set enrichment analysis [read about options in limma reference manua "10.GeneSetTests"]
-[] correlation of logFC values between DE in different lists
+[x] correlation of logFC values between DE in different lists
 [] above with Manoj's data
 
 [] Find how within-generation normalization affects logFC values
