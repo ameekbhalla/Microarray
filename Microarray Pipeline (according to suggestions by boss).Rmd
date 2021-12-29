@@ -926,6 +926,9 @@ f3_m %>% mutate(f3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %
   group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>% 
   filter(map_dbl(.x = .$groups, length) >= 2) %>% #keep only rows which occur in two or more sets
   mutate(groups_collapsed = map_chr(groups, ~ unlist(.) %>% paste(collapse = "---"))) %>%
+  filter(groups_collapsed %in%
+            (select(.data = ., groups_collapsed) %>% distinct() %>% slice(c(1:2, 4:6, 12)) %>% pluck(1))
+         ) %>%
   ggplot(aes(x = groups)) +
   geom_bar() +
   scale_x_upset()
