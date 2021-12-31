@@ -18,5 +18,7 @@ output: html_document
 [x] correlation of logFC values between DE in different lists
 [] above with Manoj's data
 
+[] DE of F1 genotype with respect to F0 genotype
+
 [] Find how within-generation normalization affects logFC values
 [] How to remove genes present in control-vs-control comparisons: via interaction?

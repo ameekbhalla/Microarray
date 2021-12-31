@@ -937,7 +937,7 @@ f3_m %>% mutate(f3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %
       groups_collapsed == "rpr.cyo_dilp3.ser_m---cyo_ser_m---f2_m" ~ 5,
       groups_collapsed == "rpr.cyo_dilp3.ser_m---cyo_ser_m---f2_m---f3_m" ~ 6
       )) %>% 
-  mutate(groups_re = forcats::fct_reorder(groups_collapsed, gener)) %>% View()
+  mutate(groups_re = forcats::fct_reorder(groups_collapsed, gener)) %>%
   ggplot(aes(x = groups_re)) +
   geom_bar() +
   scale_x_upset()
