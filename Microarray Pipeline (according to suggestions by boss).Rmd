@@ -628,6 +628,15 @@ remove(design_1, fit_model_1, fit2_model_1)
 hist(f3_m$P.Value)
 ```
 
+```{r group_means_interaction_2}
+#all F1 compared to F0
+## fewer genes should be different between F0 and rpr;dilp3 than the other three genotypes since they both undergo ablation
+
+
+
+```
+
+
 ## Empirical null distributions
 ```{r annotation}
 #annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
