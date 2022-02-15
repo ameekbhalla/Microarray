@@ -319,7 +319,7 @@ The ExpressionSet obejects were filtered to remove genes with low expression and
 ```{r gcrma_intesities eval=FALSE}
 eset_list <- list()
 eset2_list <- list()
-
+# to start the for loop at zero, replace seq_along(1:15) with c(0:15) and [[i]] with [[i+1]]
 for (i in seq_along (1:15)) {#set seq to 1 to produce plot showing the normalizing effect of gcrma as in DAC2 slide 30
   keep <- rowMeans(exprs(eset)) > i
   eset_list[[i]] <- eset[keep, ] #ExpressionSet objects cannot be subset with filter() or filter()
@@ -1265,10 +1265,10 @@ mini <-  which(
   # pData(eset)$generation != "F0 + F1" &
   pData(eset)$genotype   != "cyo/+; dilp3/+" & 
   pData(eset)$genotype   != "rpr/+; ser/+" & 
-  pData(eset)$genotype   != "rpr/+; dilp3/+" &
+  pData(eset)$genotype   != "rpr/+; dilp3/+" #& #commented out to include both sexes
   # pData(eset)$genotype   != "rpr/cyo; dilp3/ser" &
   # pData(eset)$sex        != "female" &
-  pData(eset)$sex        != "male"
+  # pData(eset)$sex        != "male" #commented out to include both sexes
                 )
 #use the rownames object `mini` to perform the actual subsetting
 eset_mini <- eset[ , mini] #ExpressionSet objects cannot be subset with filter() or subset()
@@ -1349,7 +1349,7 @@ colnames(design_1)
 colSums(design_1)
 
 #estimate the correlation between measurements made on the same repliactes:
-corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$replicate)
+corfit_1 <- duplicateCorrelation(eset_mini, design_1, block =  pData(eset_mini)$group2) #group2 from correlations.R where blocking is done on both replicate and sex
 corfit_1$consensus
 
 # corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
@@ -1358,7 +1358,7 @@ corfit_1$consensus
 
 #fit the linear model fit_model_1 with blocking
 fit_model_1 <- lmFit(eset_mini, design_1, 
-                     block =  pData(eset_mini)$replicate, 
+                     block =  pData(eset_mini)$group2, #group2 from correlations.R where blocking is done on both replicate and sex
                      correlation = corfit_1$consensus)
 
 # #fit the linear model fit_model_1 without blocking
@@ -1401,7 +1401,7 @@ cm_1_genotype_simple <- makeContrasts(
 cm_1_genotype_simple
 
 #filter out probes with an average expression level below 3
-keep <- fit_model_1$Amean > 3 #`Amean` stores the average log expression values
+keep <- fit_model_1$Amean > 8 #`Amean` stores the average log expression values; >8 cutoff gives most normal-looking expression densities
 fit2_model_1 <- fit_model_1[keep, ] 
 nrow(fit2_model_1)
 
@@ -1460,6 +1460,7 @@ hist(top_1_geno_3$P.Value)
 #   theme(plot.title = element_text(hjust = 0.5, vjust = -1),
 #         plot.subtitle = element_text(hjust = 0.5, vjust = -1))
 ```
+
 ```{r group_means_interaction_2}
 ## Build the contrasts matrix for discovering main effect of generation in females
 
