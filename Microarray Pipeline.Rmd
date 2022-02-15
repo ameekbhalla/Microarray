@@ -1973,8 +1973,8 @@ fdr_1_1 <- (top_1_geno_1$t - median(top_1_geno_1$t)) %>% fdrtool(statistic = "no
 fdr_1_2 <- (top_1_geno_2$t - median(top_1_geno_2$t)) %>% fdrtool(statistic = "normal", plot = F)
 fdr_1_3 <- (top_1_geno_3$t - median(top_1_geno_3$t)) %>% fdrtool(statistic = "normal", plot = F)
 
-geno_0 <- bind_cols(top_1_geno_0, fdr_1_0) %>% rownames_to_column()
-geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column()
+geno_0 <- bind_cols(top_1_geno_0, fdr_1_0) %>% rownames_to_column() %>% mutate(pval = P.Value, qval = adj.P.Val)
+geno_1 <- bind_cols(top_1_geno_1, fdr_1_1) %>% rownames_to_column() %>% mutate(pval = P.Value, qval = adj.P.Val)
 geno_2 <- bind_cols(top_1_geno_2, fdr_1_2) %>% rownames_to_column()
 geno_3 <- bind_cols(top_1_geno_3, fdr_1_3) %>% rownames_to_column()
 
