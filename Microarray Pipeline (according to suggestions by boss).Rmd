@@ -961,22 +961,7 @@ by_generation[5,3] <- rpr_ser_m %>% filter(qval <= 0.05) %>% count()
 by_generation[6,3] <- f2_m %>% filter(qval <= 0.05) %>% count()
 by_generation[7,3] <- f3_m %>% filter(qval <= 0.05) %>% count()
 
-by_generation$female_2 <- 0
-
-by_generation[2,4] <- cyo_ser_f_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[3,4] <- rpr_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[4,4] <- cyo_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[5,4] <- rpr_ser_f_2 %>% filter(qval <= 0.05) %>% count()
-
-by_generation$male_2 <- 0
-
-by_generation[2,5] <- cyo_ser_m_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[3,5] <- rpr_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[4,5] <- cyo_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
-by_generation[5,5] <- rpr_ser_m_2 %>% filter(qval <= 0.05) %>% count()
-
-
-
+#plot of DE counts obtained on comparing test to control lineage
 by_generation <- by_generation %>% pivot_longer(!data, names_to = "sex", values_to = "count") %>% 
 filter(sex == "male" | data == "rpr.cyo_dilp3.ser") %>% 
 mutate(generation = case_when(data == "rpr.cyo_dilp3.ser" ~ "F0",
@@ -1003,7 +988,7 @@ by_generation %>%
   xlab("Generations") +
   theme_classic()
   
-  
+#plot of DE counts obtained on comparing control to control lineage
 tribble(
        ~group, ~count, ~generation, ~sex, ~data,
   "F2_v_F1_m",     64, "F2_v_F1", "m", "control",
@@ -1019,7 +1004,23 @@ tribble(
   ylab("DE Count") +
   xlab("Generations") +
   theme_classic()
+```
 
+```{r counts2}
+#counts of DE genes obtained on comparing F0 and F1 genoyypes
+by_generation$female_2 <- 0
+
+by_generation[2,4] <- cyo_ser_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[3,4] <- rpr_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[4,4] <- cyo_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[5,4] <- rpr_ser_f_2 %>% filter(qval <= 0.05) %>% count()
+
+by_generation$male_2 <- 0
+
+by_generation[2,5] <- cyo_ser_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[3,5] <- rpr_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[4,5] <- cyo_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[5,5] <- rpr_ser_m_2 %>% filter(qval <= 0.05) %>% count()
 ```
 
 ```{r volcano_plots}
@@ -1130,10 +1131,16 @@ data.frame(
   
 ```
 
-
 ```{r upset}
 library("ggupset")
 
+# manual intersection between DE gene lists obtained in different generations in males
+rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id") %>% 
+  intersect(cyo_ser_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id")) %>% #519
+  intersect(f2_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id")) %>% #74
+  intersect(f3_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id"))   # 15
+
+# upset plot
 rpr.cyo_dilp3.ser_m %>% mutate(rpr.cyo_dilp3.ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(-c(5:7)) %>% 
   full_join(
 rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1, 8)), by = "probe_id") %>%
