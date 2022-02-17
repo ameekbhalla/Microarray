@@ -1366,3 +1366,211 @@ map2_df(.x = "rpr.cyo_dilp3.ser_m",
 
 ```
 
+```{r kegg}
+# f0 females
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_f, 
+                                        as.character(
+                                          rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_f)[back_genes_idx]
+back_genes <- setdiff(back_genes, rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+# intersect(back_genes, rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+# length(back_genes)
+
+# rpr.cyo_dilp3.ser_f <- rpr.cyo_dilp3.ser_f %>% column_to_rownames(var = "probe_id")
+# 
+# geneplotter::multidensity(list(
+#         all = rpr.cyo_dilp3.ser_f[,"AveExpr"] ,
+#         fore = rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("AveExpr"),
+#         back = rpr.cyo_dilp3.ser_f[rownames(rpr.cyo_dilp3.ser_f) %in% back_genes, "AveExpr"]
+#         ),
+#         col = c("#e46981", "#ae7ee2", "#a7ad4a"),
+#      xlab = "mean expression",
+#    main = "DE genes for CD-background-matching")
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    rpr.cyo_dilp3.ser_f %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+library(enrichplot)
+reactome_enrich <- pairwise_termsim(reactome_enrich)
+emapplot(reactome_enrich, showCategory = 10)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f0 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_m, 
+                                        as.character(
+                                          rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    rpr.cyo_dilp3.ser_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+
+# f1 males
+#####
+# f1 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_m, 
+                                        as.character(
+                                          cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = cyo_ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    cyo_ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    cyo_ser_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f2 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f2_m, 
+                                        as.character(
+                                          f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f2_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = f2_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    f2_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    f2_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f3 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f3_m, 
+                                        as.character(
+                                          f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f3_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = f3_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    f3_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    f3_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+```
