@@ -7,10 +7,9 @@ output: html_document
 1. clustering by absolute expression with all 66 arrays (separate dendrogram and heatmap)
 2. PCA along multiple dimensions until groups stop segregating
 
-[] clustering by relative expression level of topmost DE genes
+[] clustering of lineages by relative expression level of topmost DE genes
 [] supervised clustering: take DE genes in one generation and see if they predict clustering in a different generation 
 [] TAG glmm
-[] Pathway analysis [GO analysis]
 
 [x] Number of DE genes in each generation; also, control-vs-control
 [x] Overlap between lists of DE genes
@@ -18,7 +17,21 @@ output: html_document
 [x] correlation of logFC values between DE in different lists
 [] above with Manoj's data
 
-[] DE of F1 genotype with respect to F0 genotype
+[x] DE of F1 genotypes with respect to F0 genotype
 
 [] Find how within-generation normalization affects logFC values
 [] How to remove genes present in control-vs-control comparisons: via interaction?
+
+[x] expression of insulin pathway genes
+[x] gene set enrichment
+[x] do network analysis
+[x] tau expression > biomarkers flowchart
+[x] three-column slide
+[] bayes primer figure
+[] redo TAG plots
+
+5. Flexibly testing various study designs
+For testing, you learned how to use the versatile group-means parametrization to fit a single coefficient per study group and construct interpretable contrasts that are easier to read and understand by you and others compared to more traditional modelling approaches. 
+
+8. Test for enrichment of gene sets
+Lastly, you learned to gain a __systems-level perspective__ of your results by testing for enrichment of differentially expressed genes in databases of known gene sets like KEGG pathways and Gene Ontology categories. 
