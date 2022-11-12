@@ -1,0 +1,1505 @@
+---
+output: html_document
+---
+
+***
+# Setup
+The default chunk options can be set in the first chunk itself. Later, the behaviour of individuals chunks can be modified by modifying a specific argument.
+
+```{r setup results = "hide"}
+## Set default chunk options
+
+knitr::opts_chunk$set(results = "hide", 
+                      tidy = TRUE)
+## Load Packages
+library(affy) # Bioconductor package for analysis of older Affymetrix arrays
+#library(affyio)
+#library(affyPLM)
+#library(annaffy)
+#library(annotate)
+#library(arrayQualityMetrics)
+library(BiocManager)
+# library(drosophila2.db) # annotation package for the model organism
+library(drosophila2cdf)
+# library(formatR)
+library(gcrma)
+library(limma)
+#library(simpleaffy)
+library(tidyverse)
+```
+
+# Importing data into R
+```{r get_data}
+
+F0_kp <- read_excel("F0_kp.xlsx", col_types = c("text", "text", "text", "text", "skip", "skip",
+                                                "skip", "text", "text", "text", "text", "text",
+                                                "numeric", "text")
+                    )
+
+F0_kp <- F0_kp |> mutate(
+  replicate = replicate |> as.factor(),
+  genotype = `sample type` |> factor(levels = c("w1118", "KD")),
+  temperature = temperature |> as.factor(),
+  label = paste(genotype, temperature, replicate, sep = "_")
+) |> dplyr::select(cel_file_name, generation, genotype, temperature, replicate, label)
+
+raw_f0 <- ReadAffy(celfile.path = "./kp CEL")
+
+phenoData(raw_f0) <- AnnotatedDataFrame(F0_kp)
+
+sampleNames(raw_f0) <- F0_kp$label
+
+
+all(colnames(exprs(raw_f0)) == rownames(pData(raw_f0)))
+
+all(colnames(exprs(raw_f0)) == sampleNames(raw_f0))
+
+all(rownames(pData(raw_f0)) == sampleNames(raw_f0))
+
+all(rownames(exprs(raw_f0)) %>% head() == rownames(fData(raw_f0)) %>% head())
+
+# one-line check
+validObject(raw_f0)
+
+eset_f0 <- gcrma(raw_f0)
+```
+
+```{r plot_intensities eval = FALSE}
+raw_expression_f0 <- exprs(raw_f0) %>% #plotDensities() accepts only matrix/ExpressionSet objects
+                  log2() #the data is log2 scaled to linearize it across different orders of magnitude 
+
+
+
+plotDensities(raw_expression_f0, group = pData(raw_f0)$genotype, legend = "topright",
+              main = "Variation in expression according to genotype (raw_f0)")
+
+
+norm_expression_f0 <- exprs(eset_f0) %>% #plotDensities() accepts only matrix/ExpressionSet objects
+                  log2() #the data is log2 scaled to linearize it across different orders of 
+
+plotDensities(norm_expression_f0, group = pData(eset_f0)$genotype, legend = "topright",
+              main = "Variation in expression according to genotype (eset_f0)")
+```
+
+# Differential expression analysis
+## Model formula 1: Group-means parametrization 
+```{r group_means_interaction}
+#####
+pData(eset_f1_f) <- pData(eset_f1_f) %>% 
+  mutate(
+    gtype_clean = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr.cyo_dilp3.ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr_dilp3",
+      genotype == "cyo/+; dilp3/+" ~ "cyo_dilp3",
+      genotype == "rpr/+; ser/+" ~ "rpr_ser",
+      genotype == "cyo/+; ser/+" ~ "cyo_ser",
+      TRUE ~ "w1118") %>% as_factor())
+
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + gtype_clean, data = pData(eset_f1_f))
+
+colnames(design_1) <- levels(pData(eset_f1_f)$gtype_clean)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f1_f, design_1, block =  pData(eset_f1_f)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_mini, design_1, 
+#                      block =  pData(eset)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f1_f, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f1_f <- makeContrasts(
+  rpr.cyo_dilp3.ser = (rpr.cyo_dilp3.ser - w1118),
+  cyo_ser = (cyo_ser - w1118),
+  rpr_dilp3 = (rpr_dilp3 - w1118),
+  cyo_dilp3 = (cyo_dilp3 - w1118),
+  rpr_ser = (rpr_ser  - w1118),
+  levels = design_1)
+
+cm_f1_f
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_f)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f1_f <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f1_f) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f1_f) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+rpr.cyo_dilp3.ser_f <- topTable(
+  results_f1_f,
+  coef=c(1),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_ser_f <- topTable(
+  results_f1_f,
+  coef=c(2),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_dilp3_f <- topTable(
+  results_f1_f,
+  coef=c(3),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_dilp3_f <- topTable(
+  results_f1_f,
+  coef=c(4),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_ser_f <- topTable(
+  results_f1_f,
+  coef=c(5),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+#####
+pData(eset_f1_m) <- pData(eset_f1_m) %>% 
+  mutate(
+    gtype_clean = case_when( # categorize genotypes into test or control lineages
+      genotype == "rpr/cyo; dilp3/ser" ~ "rpr.cyo_dilp3.ser",
+      genotype == "rpr/+; dilp3/+" ~ "rpr_dilp3",
+      genotype == "cyo/+; dilp3/+" ~ "cyo_dilp3",
+      genotype == "rpr/+; ser/+" ~ "rpr_ser",
+      genotype == "cyo/+; ser/+" ~ "cyo_ser",
+      TRUE ~ "w1118") %>% as_factor())
+
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + gtype_clean, data = pData(eset_f1_m))
+
+colnames(design_1) <- levels(pData(eset_f1_m)$gtype_clean)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f1_m, design_1, block =  pData(eset_f1_m)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_mini, design_1, 
+#                      block =  pData(eset)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f1_m, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f1_m <- makeContrasts(
+  rpr.cyo_dilp3.ser = (rpr.cyo_dilp3.ser - w1118),
+  cyo_ser = (cyo_ser - w1118),
+  rpr_dilp3 = (rpr_dilp3 - w1118),
+  cyo_dilp3 = (cyo_dilp3 - w1118),
+  rpr_ser = (rpr_ser  - w1118),
+  levels = design_1)
+
+cm_f1_m
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_m)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f1_m <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f1_m) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f1_m) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+rpr.cyo_dilp3.ser_m <- topTable(
+  results_f1_m,
+  coef=c(1),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_ser_m <- topTable(
+  results_f1_m,
+  coef=c(2),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_dilp3_m <- topTable(
+  results_f1_m,
+  coef=c(3),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_dilp3_m <- topTable(
+  results_f1_m,
+  coef=c(4),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_ser_m <- topTable(
+  results_f1_m,
+  coef=c(5),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+hist(rpr.cyo_dilp3.ser_m$P.Value)
+hist(cyo_ser_m$P.Value)
+hist(rpr_dilp3_m$P.Value)
+hist(cyo_dilp3_m$P.Value)
+hist(rpr_ser_m$P.Value)
+#####
+group <- with(pData(eset_f2_f), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_f2_f)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_f2_f))
+colnames(design_1) <- levels(pData(eset_f2_f)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f2_f, design_1, block =  pData(eset_f2_f)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_f2_f, design_1, 
+#                      block =  pData(eset_f2_f)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f2_f, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f2_f <- makeContrasts(
+  f2_f = (F2.test - F2.control),
+  levels = design_1)
+
+cm_f2_f
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f2_f)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f2_f <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f2_f) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f2_f) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+f2_f <- topTable(
+  results_f2_f,
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+hist(f2_f$P.Value)
+#####
+group <- with(pData(eset_f2_m), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_f2_m)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_f2_m))
+colnames(design_1) <- levels(pData(eset_f2_m)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f2_m, design_1, block =  pData(eset_f2_m)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_f2_m, design_1, 
+#                      block =  pData(eset_f2_m)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f2_m, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f2_m <- makeContrasts(
+  f2_m = (F2.test - F2.control),
+  levels = design_1)
+
+cm_f2_m
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f2_m)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f2_m <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f2_m) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f2_m) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+f2_m <- topTable(
+  results_f2_m,
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+hist(f2_m$P.Value)
+#####
+group <- with(pData(eset_f3_f), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_f3_f)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_f3_f))
+colnames(design_1) <- levels(pData(eset_f3_f)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f3_f, design_1, block =  pData(eset_f3_f)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_f3_f, design_1, 
+#                      block =  pData(eset_f3_f)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f3_f, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f3_f <- makeContrasts(
+  f3_f = (F3.test - F3.control),
+  levels = design_1)
+
+cm_f3_f
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f3_f)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f3_f <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f3_f) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f3_f) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+f3_f <- topTable(
+  results_f3_f,
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+hist(f3_f$P.Value)
+#####
+group <- with(pData(eset_f3_m), 
+              paste(generation,
+                    genotype, 
+                    # sex,
+                    # day,
+                    sep = "."))
+
+pData(eset_f3_m)$group <- as.factor(group)
+remove(group)
+
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + group, data = pData(eset_f3_m))
+colnames(design_1) <- levels(pData(eset_f3_m)$group)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f3_m, design_1, block =  pData(eset_f3_m)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_f3_m, design_1, 
+#                      block =  pData(eset_f3_m)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f3_m, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f3_m <- makeContrasts(
+  f3_m = (F3.test - F3.control),
+  levels = design_1)
+
+cm_f3_m
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f3_m)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f3_m <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f3_m) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f3_m) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+f3_m <- topTable(
+  results_f3_m,
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+hist(f3_m$P.Value)
+```
+
+```{r group_means_interaction_2}
+#all F1 compared to F0
+## fewer genes should be different between F0 and rpr;dilp3 than the other three genotypes since they both undergo ablation
+
+#####
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + gtype_clean, data = pData(eset_f1_f))
+
+colnames(design_1) <- levels(pData(eset_f1_f)$gtype_clean)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f1_f, design_1, block =  pData(eset_f1_f)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_mini, design_1, 
+#                      block =  pData(eset)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f1_f, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f1_f <- makeContrasts(
+  cyo_ser = (cyo_ser - rpr.cyo_dilp3.ser),
+  rpr_dilp3 = (rpr_dilp3 - rpr.cyo_dilp3.ser),
+  cyo_dilp3 = (cyo_dilp3 - rpr.cyo_dilp3.ser),
+  rpr_ser = (rpr_ser  - rpr.cyo_dilp3.ser),
+  levels = design_1)
+
+cm_f1_f
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_f)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f1_f <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f1_f) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f1_f) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+
+cyo_ser_f_2 <- topTable(
+  results_f1_f,
+  coef=c(1),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_dilp3_f_2 <- topTable(
+  results_f1_f,
+  coef=c(2),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_dilp3_f_2 <- topTable(
+  results_f1_f,
+  coef=c(3),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_ser_f_2 <- topTable(
+  results_f1_f,
+  coef=c(4),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+
+#####
+# Create design matrix with group-means parametrization (no intercept)
+design_1 <- model.matrix(~ 0 
+                         # + day 
+                         + gtype_clean, data = pData(eset_f1_m))
+
+colnames(design_1) <- levels(pData(eset_f1_m)$gtype_clean)
+colnames(design_1)
+
+# Count the number of samples modeled by each coefficient
+colSums(design_1)
+
+#estimate the correlation between measurements made on the same repliactes:
+# corfit_1 <- duplicateCorrelation(eset_f1_m, design_1, block =  pData(eset_f1_m)$replicate)
+# corfit_1$consensus
+
+# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
+# corfit_1$cor <- by_sex$both[[1]]$cor
+# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
+
+#fit the linear model fit_model_1 with blocking
+# fit_model_1 <- lmFit(eset_mini, design_1, 
+#                      block =  pData(eset)$replicate, 
+#                      correlation = corfit_1$consensus)
+
+# #fit the linear model fit_model_1 without blocking
+fit_model_1 <- lmFit(eset_f1_m, design_1)
+
+## Build the contrasts matrix for discovering main effect of genotype in females
+
+cm_f1_m <- makeContrasts(
+  cyo_ser = (cyo_ser - rpr.cyo_dilp3.ser),
+  rpr_dilp3 = (rpr_dilp3 - rpr.cyo_dilp3.ser),
+  cyo_dilp3 = (cyo_dilp3 - rpr.cyo_dilp3.ser),
+  rpr_ser = (rpr_ser  - rpr.cyo_dilp3.ser),
+  levels = design_1)
+
+cm_f1_m
+
+#fit the contrast matrix
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_m)
+
+#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
+results_f1_m <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend; 
+                       robust = TRUE #increases power for some kinds of studies
+                       ) 
+
+#Results of all contrasts simultaneously
+decideTests(results_f1_m) %>% summary()
+
+# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
+decideTests(results_f1_m) %>% vennDiagram()
+
+#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
+# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
+
+cyo_ser_m_2 <- topTable(
+  results_f1_m,
+  coef=c(1),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_dilp3_m_2 <- topTable(
+  results_f1_m,
+  coef=c(2),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+cyo_dilp3_m_2 <- topTable(
+  results_f1_m,
+  coef=c(3),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+rpr_ser_m_2 <- topTable(
+  results_f1_m,
+  coef=c(4),
+  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
+
+remove(design_1, fit_model_1, fit2_model_1)
+
+```
+
+## Empirical null distributions
+```{r annotation}
+#annotation returns mutliple matches for some of the probes so perform it after obtaining DE gene list 
+anno_eset <- AnnotationDbi::select(drosophila2.db,
+                                       keys = (featureNames(eset_f3_m)), #indexes the rows
+                                       columns = c("SYMBOL", "GENENAME", "ENTREZID"), #indexes the columns
+                                       keytype = "PROBEID") %>% #arranges the output by this column
+  filter(!is.na(SYMBOL)) %>% # this also removes quality control probes
+  group_by(PROBEID) %>%
+  filter(n() == 1) # remove  probes which have multiple genes associated with them
+# check that all quality control probes, containing the pattern AFFX in their name, were removed
+# str_detect(anno_eset$PROBEID, "AFFX") %>% sum()
+```
+
+```{r empirical_null}
+
+library(fdrtool)
+
+#####
+rpr.cyo_dilp3.ser_f <- (rpr.cyo_dilp3.ser_f$t - median(rpr.cyo_dilp3.ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_ser_f <- (cyo_ser_f$t - median(cyo_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_dilp3_f <- (rpr_dilp3_f$t - median(rpr_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_dilp3_f <- (cyo_dilp3_f$t - median(cyo_dilp3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_ser_f <- (rpr_ser_f$t - median(rpr_ser_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+#####
+rpr.cyo_dilp3.ser_m <- (rpr.cyo_dilp3.ser_m$t - median(rpr.cyo_dilp3.ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr.cyo_dilp3.ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_ser_m <- (cyo_ser_m$t - median(cyo_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_dilp3_m <- (rpr_dilp3_m$t - median(rpr_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_dilp3_m <- (cyo_dilp3_m$t - median(cyo_dilp3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_ser_m <- (rpr_ser_m$t - median(rpr_ser_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+#####
+f2_f <- (f2_f$t - median(f2_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+#####
+f2_m <- (f2_m$t - median(f2_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f2_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+#####
+f3_f <- (f3_f$t - median(f3_f$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_f, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+#####
+f3_m <- (f3_m$t - median(f3_m$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(f3_m, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+```
+
+```{r empirical_null_2}
+
+library(fdrtool)
+
+#####
+cyo_ser_f_2 <- (cyo_ser_f_2$t - median(cyo_ser_f_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_f_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_dilp3_f_2 <- (rpr_dilp3_f_2$t - median(rpr_dilp3_f_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_f_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_dilp3_f_2 <- (cyo_dilp3_f_2$t - median(cyo_dilp3_f_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_f_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_ser_f_2 <- (rpr_ser_f_2$t - median(rpr_ser_f_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_f_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+#####
+cyo_ser_m_2 <- (cyo_ser_m_2$t - median(cyo_ser_m_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_ser_m_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_dilp3_m_2 <- (rpr_dilp3_m_2$t - median(rpr_dilp3_m_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_dilp3_m_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+cyo_dilp3_m_2 <- (cyo_dilp3_m_2$t - median(cyo_dilp3_m_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(cyo_dilp3_m_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+
+rpr_ser_m_2 <- (rpr_ser_m_2$t - median(rpr_ser_m_2$t)) %>% fdrtool(statistic = "normal", plot = F) %>% cbind(rpr_ser_m_2, .) %>% rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) %>% select("probe_id", "symbol", "gene_name", "entrez_id", "logFC", "pval", "qval") #  %>% drop_na()
+```
+
+```{r write_files}
+#####
+library(XLConnect)
+
+# by_generation2 <- loadWorkbook("by_generation2.xlsx", create = TRUE)
+# 
+# createSheet(by_generation2, "rpr.cyo_dilp3.ser_f0_f")
+# writeWorksheet(by_generation2, rpr.cyo_dilp3.ser_f, "rpr.cyo_dilp3.ser_f0_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
+# 
+# createSheet(by_generation2, "cyo_ser_f1_f")
+# writeWorksheet(by_generation2, cyo_ser_f, "cyo_ser_f1_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
+# 
+# createSheet(by_generation2, "rpr_dilp3_f1_f")
+# writeWorksheet(by_generation2, rpr_dilp3_f, "rpr_dilp3_f1_f")
+# saveWorkbook(by_generation2, "by_generation2.xlsx")
+
+by_generation2.2 <- loadWorkbook("by_generation2.2.xlsx", create = TRUE)
+createSheet(by_generation2.2, "cyo_dilp3_f1_f")
+writeWorksheet(by_generation2.2, cyo_dilp3_f, "cyo_dilp3_f1_f")
+saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
+
+by_generation2.3 <- loadWorkbook("by_generation2.3.xlsx", create = TRUE)
+createSheet(by_generation2.3, "rpr_ser_f1_f")
+writeWorksheet(by_generation2.3, rpr_ser_f, "rpr_ser_f1_f")
+saveWorkbook(by_generation2.3, "by_generation2.3.xlsx")
+
+by_generation2.4 <- loadWorkbook("by_generation2.4.xlsx", create = TRUE)
+createSheet(by_generation2.4, "f2_f")
+writeWorksheet(by_generation2.4, f2_f, "f2_f")
+saveWorkbook(by_generation2.4, "by_generation2.4.xlsx")
+
+# by_generation2.5 <- loadWorkbook("by_generation2.5.xlsx", create = TRUE)
+# createSheet(by_generation2.5, "f3_f")
+# writeWorksheet(by_generation2.5, f3_f, "f3_f")
+# saveWorkbook(by_generation2.5, "by_generation2.5.xlsx")
+```
+
+```{r write_files_2}
+#####
+library(XLConnect)
+
+by_generation2.1 <- loadWorkbook("by_generation2.1.xlsx", create = TRUE)
+createSheet(by_generation2.1, "cyo_ser_v_f0_m")
+writeWorksheet(by_generation2.1, cyo_ser_m_2, "cyo_ser_v_f0_m")
+saveWorkbook(by_generation2.1, "by_generation2.1.xlsx")
+
+createSheet(by_generation2.1, "rpr_dilp3_v_f0_m")
+writeWorksheet(by_generation2.1, rpr_dilp3_m_2, "rpr_dilp3_v_f0_m")
+saveWorkbook(by_generation2.1, "by_generation2.1.xlsx")
+
+by_generation2.2 <- loadWorkbook("by_generation2.2.xlsx", create = TRUE)
+createSheet(by_generation2.2, "cyo_dilp3_v_f0_m")
+writeWorksheet(by_generation2.2, cyo_dilp3_m_2, "cyo_dilp3_v_f0_m")
+saveWorkbook(by_generation2.2, "by_generation2.2.xlsx")
+
+by_generation2.3 <- loadWorkbook("by_generation2.3.xlsx", create = TRUE)
+createSheet(by_generation2.3, "rpr_ser_v_f0_m")
+writeWorksheet(by_generation2.3, rpr_ser_m_2, "rpr_ser_v_f0_m")
+saveWorkbook(by_generation2.3, "by_generation2.3.xlsx")
+```
+
+```{r counts}
+by_generation <- NULL
+by_generation <- by_generation %>% as_tibble()
+
+by_generation[1,1] <- rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[2,1] <- cyo_ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[3,1] <- rpr_dilp3_f %>% filter(qval <= 0.05) %>% count()
+by_generation[4,1] <- cyo_dilp3_f %>% filter(qval <= 0.05) %>% count()
+by_generation[5,1] <- rpr_ser_f %>% filter(qval <= 0.05) %>% count()
+by_generation[6,1] <- f2_f %>% filter(qval <= 0.05) %>% count()
+by_generation[7,1] <- f3_f %>% filter(qval <= 0.05) %>% count()
+
+by_generation <- by_generation %>% rename(female = n)
+by_generation$data <- c(
+  "rpr.cyo_dilp3.ser",
+  "cyo_ser",
+  "rpr_dilp3",
+  "cyo_dilp3",
+  "rpr_ser", 
+  "f2", 
+  "f3"
+)
+
+by_generation$male <- 0
+
+by_generation[1,3] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[2,3] <- cyo_ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[3,3] <- rpr_dilp3_m %>% filter(qval <= 0.05) %>% count()
+by_generation[4,3] <- cyo_dilp3_m %>% filter(qval <= 0.05) %>% count()
+by_generation[5,3] <- rpr_ser_m %>% filter(qval <= 0.05) %>% count()
+by_generation[6,3] <- f2_m %>% filter(qval <= 0.05) %>% count()
+by_generation[7,3] <- f3_m %>% filter(qval <= 0.05) %>% count()
+
+#plot of DE counts obtained on comparing test to control lineage
+by_generation <- by_generation %>% pivot_longer(!data, names_to = "sex", values_to = "count") %>% 
+filter(sex == "male" | data == "rpr.cyo_dilp3.ser") %>% 
+mutate(generation = case_when(data == "rpr.cyo_dilp3.ser" ~ "F0",
+                              data == "cyo_ser" ~ "F1.1",
+                              data == "rpr_dilp3" ~ "F1.2",
+                              data == "cyo_dilp3" ~ "F1.3",
+                              data == "rpr_ser" ~ "F1.4",
+                              data == "f2" ~ "F2",
+                              data == "f3" ~ "F3"),
+       sex = case_when(sex == "female" ~ "f",
+                       sex == "male" ~ "m")
+       ) 
+
+by_generation$group <- with(by_generation, 
+                            paste(generation,
+                                  sex, 
+                                  sep = "_")) %>% as.factor()
+
+by_generation %>% 
+  ggplot(aes(x = group, y = count)) + geom_col() + 
+   # facet_grid(sex ~ .) +
+    ylim(0,4000) +
+    ylab("DE Count") +
+  xlab("Generations") +
+  theme_classic()
+  
+#plot of DE counts obtained on comparing control to control lineage
+tribble(
+       ~group, ~count, ~generation, ~sex, ~data,
+  "F2_v_F1_m",     64, "F2_v_F1", "m", "control",
+  "F3_v_F2_m",      0, "F3_v_F2", "m", "control",
+  "F3_v_F1_m",    191, "F3_v_F1", "m", "control",
+  "F2_v_F1_F",      3, "F2_v_F1", "f", "control",
+  "F3_v_F2_F",      0, "F3_v_F2", "f", "control",
+  "F3_v_F1_F",      1, "F3_v_F1", "f", "control",
+) %>% select(data, sex, count, generation, group) %>% 
+  ggplot(aes(x = group, y = count)) + geom_col() + 
+    ylim(0,4000) +
+   # facet_grid(sex ~ .) +
+  ylab("DE Count") +
+  xlab("Generations") +
+  theme_classic()
+```
+
+```{r counts2}
+#counts of DE genes obtained on comparing F0 and F1 genoyypes
+by_generation$female_2 <- 0
+
+by_generation[2,4] <- cyo_ser_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[3,4] <- rpr_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[4,4] <- cyo_dilp3_f_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[5,4] <- rpr_ser_f_2 %>% filter(qval <= 0.05) %>% count()
+
+by_generation$male_2 <- 0
+
+by_generation[2,5] <- cyo_ser_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[3,5] <- rpr_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[4,5] <- cyo_dilp3_m_2 %>% filter(qval <= 0.05) %>% count()
+by_generation[5,5] <- rpr_ser_m_2 %>% filter(qval <= 0.05) %>% count()
+```
+
+```{r volcano_plots}
+bind_rows("F0" = rpr.cyo_dilp3.ser_m, 
+          "F1" = cyo_ser_m, 
+          "F2" = f2_m, 
+          "F3" = f3_m, 
+          .id = "generation") %>% 
+  mutate(colo = case_when(qval <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
+  ggplot(aes(x = logFC, y = -log(pval, 10), colour = colo)) +
+  geom_point(shape= 20) + 
+  # xlim(-2,2) +
+  ylim(0,15) +
+  scale_color_manual(values = c("darkgray", "red")) +
+  facet_wrap(~ #scales = "free",
+             generation) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r venn_diagrams}
+f0_f <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_f <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+f0_m <- geno_0 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+f1_m <- geno_1 %>% filter(logFC <= 0.05, pval <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+
+library(VennDiagram)
+
+# Chart
+venn.diagram(
+        x = list(f1_f$rowname, f1_m$rowname),
+        category.names = c("F1 Female" , "F1 Male"),
+        filename = 'F1_venn_diagramm.png',
+        output=TRUE)
+
+```
+
+```{r venn_diagrams_2}
+
+by_generation$overlap <- 0
+
+by_generation[2,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[3,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+cyo_ser_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[4,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr_dilp3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[5,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+cyo_dilp3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[6,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+rpr_ser_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[7,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+f2_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+by_generation[8,6] <- rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select(1) %>% 
+  intersect(
+f3_m           %>% filter(qval <= 0.05) %>% select(1)
+) %>% count()
+
+write.csv(by_generation, "output.csv", row.names=FALSE, quote=FALSE) 
+
+group1 = 1812
+group2 = c(2489, 1335L, 1639L, 1984L, 2431L, 3504L, 1375L)
+overlap = c(484L, 583L, 471L, 546L, 676L, 312L, 189L)
+total = 14430
+
+# Test for over-representation (enrichment)
+# phyper(Overlap-1, group1, total-group1, group2,lower.tail= FALSE)
+# q, m, n, k
+# phyper(Overlap-1, group2, Total-group2, group1,lower.tail= FALSE)
+
+pmap_dbl(list(q =  overlap - 1, m = group2, n = total - group2, k = group1, lower.tail= FALSE), phyper)
+
+data.frame(
+  stringsAsFactors = FALSE,
+       check.names = FALSE,
+             group = c("F0_m","F0_f","F1.1_m",
+                       "F1.2_m","F1.3_m","F1.4_m","F2_m","F3_m"),
+           count = c(1812L, 484L, 583L, 471L, 546L, 676L, 312L, 189L),
+         `p-value` = c(NA,1.48e-27,2.03e-202,
+                       3.58e-79,6.82e-86,4.76e-114,1,0.08),
+              type = c("original DE","overlap DE",
+                       "overlap DE","overlap DE","overlap DE","overlap DE",
+                       "overlap DE","overlap DE")
+  ) %>%  mutate(group = fct_relevel(group, 
+            "F0_m","F0_f","F1.1_m",
+                       "F1.2_m","F1.3_m","F1.4_m","F2_m","F3_m")) %>% 
+    ggplot(aes(x = group, y = count/1812, fill = type)) + geom_col() + geom_text(aes(label=`p-value`), position=position_dodge(width=0.9), vjust=-0.25)+ theme_classic() + theme(legend.position = "none") + ylab("DE Overlap") + xlab("Generations")
+  
+```
+
+```{r upset}
+library("ggupset")
+
+# manual intersection between DE gene lists obtained in different generations in males
+rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id") %>% 
+  intersect(cyo_ser_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id")) %>% #519
+  intersect(f2_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id")) %>% #74
+  intersect(f3_m %>% filter(qval <= 0.05) %>% drop_na() %>% select("probe_id"))   # 15
+
+# upset plot
+rpr.cyo_dilp3.ser_m %>% mutate(rpr.cyo_dilp3.ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(-c(5:7)) %>% 
+  full_join(
+rpr.cyo_dilp3.ser_f %>% mutate(rpr.cyo_dilp3.ser_f = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1, 8)), by = "probe_id") %>%
+  full_join(
+cyo_ser_m %>% mutate(cyo_ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  full_join(
+# rpr_dilp3_m %>% mutate(rpr_dilp3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+# cyo_dilp3_m %>% mutate(cyo_dilp3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+# rpr_ser_m %>% mutate(rpr_ser_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+#   full_join(
+f2_m %>% mutate(f2_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>% 
+  full_join(
+f3_m %>% mutate(f3_m = case_when(qval <= 0.05 ~ 1, TRUE ~ 0) %>% as.logical()) %>% select(c(1,8)), by = "probe_id") %>%
+  filter(rpr.cyo_dilp3.ser_m == TRUE) %>%
+  pivot_longer(!c(1:4), names_to = "group", values_to = "present") %>% 
+  group_by(probe_id) %>% filter(present == TRUE) %>% select(-c(2:4,6)) %>% summarize(groups = list(group)) %>% 
+  filter(map_dbl(.x = .$groups, length) >= 2) %>% #keep only rows which occur in two or more sets
+  mutate(groups_collapsed = map_chr(groups, ~ unlist(.) %>% paste(collapse = "---"))) %>%
+  filter(groups_collapsed %in%
+            (select(.data = ., groups_collapsed) %>% distinct() %>% slice(c(1:2, 4:6, 12)) %>% pluck(1))
+         ) %>%
+  mutate(gener = case_when(
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---rpr.cyo_dilp3.ser_f"~ 1,
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---cyo_ser_m" ~ 2,
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---f2_m"  ~ 3,
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---f3_m" ~ 4,
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---cyo_ser_m---f2_m" ~ 5,
+      groups_collapsed == "rpr.cyo_dilp3.ser_m---cyo_ser_m---f2_m---f3_m" ~ 6
+      )) %>% 
+  mutate(groups_re = forcats::fct_reorder(groups_collapsed, gener)) %>%
+  ggplot(aes(x = groups_re)) +
+  geom_bar() +
+  scale_x_upset()
+```
+
+```{r deg_correlation}
+#correlation between the logFC values of DE genes that are common between different genotype pairs
+
+#function for finding correlation between DEGs found in different pairs
+correlate_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
+               ) %>% 
+  {cor.test(.$logFC1, .$logFC2)} %>% broom::tidy()
+#the curly brackets are needed to suppress the default behavior of the pipe operator, otherwise the data frame to the left of the pipe would have been forwarded as the third argument into cor(), which only takes two arguments.
+}
+
+#how to list all objects of a particular class from the local environment
+df_list <- ls()[map_lgl(
+  ls(), #lists the the objects in the local environment
+  ~ get(.) %>% #1st action in the anonymous function; accesses an object from the local environment
+    {is.data.frame(.) & !is_tibble(.)} #2nd action in anonymous function; makes sure class of accessed object is df but not a tibble
+  )
+                ] 
+
+#run the correlate_degs() function on all the dfs in the environment
+map2_df(.x = "rpr.cyo_dilp3.ser_m",
+         .y = df_list,
+         .f = correlate_degs
+           ) %>% bind_cols(df_list %>% tibble(group = .))
+
+#function for finding DEGs that overlap within different pairs
+join_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(qval <= 0.05) %>% select(probe_id, logFC), by = "probe_id", suffix = c("1", "2")
+    ) %>% mutate(group2 = rlang::expr_name(df2)) # adds the name of the df2 into the group2 column
+  }
+
+#run the  join_degs() function on all the dfs in the environment
+map2_df(.x = "rpr.cyo_dilp3.ser_m",
+         .y = df_list,
+     .f = join_degs,
+     .id = "ref"
+           ) %>% 
+    mutate(
+      group = case_when(
+        ref == "9"  |ref == "10" ~ "F0 \n rpr.cyo_dilp3.ser",
+        ref == "3"  |ref == "4"~"F1 \n cyo_ser",
+        ref == "11" |ref == "12"~"F1 \n rpr_dilp3",
+        ref == "1"  |ref == "2"~"F1 \n cyo_dilp3",
+        ref == "13" |ref == "14"~"F1 \n rpr_ser",
+        ref == "5"  |ref == "6"~"F2",
+        ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+      group = fct_relevel(group, 
+                          "F0 \n rpr.cyo_dilp3.ser", 
+                          "F1 \n cyo_ser", "F1 \n rpr_dilp3", "F1 \n cyo_dilp3", "F1 \n rpr_ser",
+                          "F2", 
+                          "F3"
+                          ),
+    generation = case_when(
+      group == "F0 \n rpr.cyo_dilp3.ser"~ "F0",
+      group == "F1 \n cyo_ser" ~ "F1",
+      group == "F1 \n rpr_dilp3"  ~ "F1",
+      group == "F1 \n cyo_dilp3" ~ "F1",
+      group == "F1 \n rpr_ser" ~ "F1",
+      group == "F2" ~ "F2",
+      group == "F3" ~ "F3") %>% as_factor(),
+    generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+# the last two variables but without the line break in the group name
+    # group = case_when(
+    #   ref == "9"  |ref == "10" ~ "rpr.cyo_dilp3.ser",
+    #   ref == "3"  |ref == "4"~"cyo_ser",
+    #   ref == "11" |ref == "12"~"rpr_dilp3",
+    #   ref == "1"  |ref == "2"~"cyo_dilp3",
+    #   ref == "13" |ref == "14"~"rpr_ser",
+    #   ref == "5"  |ref == "6"~"F2",
+    #   ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+    # group = fct_relevel(group, "rpr.cyo_dilp3.ser", "cyo_ser", "rpr_dilp3", "cyo_dilp3", "rpr_ser", "F2", "F3"),
+    # generation = case_when(
+    #   group == "rpr.cyo_dilp3.ser"~ "F0",
+    #   group == "cyo_ser" ~ "F1",
+    #   group == "rpr_dilp3"  ~ "F1",
+    #   group == "cyo_dilp3" ~ "F1",
+    #   group == "rpr_ser" ~ "F1",
+    #   group == "F2" ~ "F2",
+    #   group == "F3" ~ "F3") %>% as_factor(),
+    # generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+    sex = case_when(
+      ref == "1"|ref == "3"|ref == "5"|ref == "7"|ref == "9"|ref == "11"|ref == "13" ~ "female",
+      TRUE ~ "male") %>% as_factor(),
+       ) %>% 
+  ggplot(aes(logFC1, logFC2, 
+             col = sex,
+             )) + 
+  geom_point(
+    alpha = 0.20,
+    shape = 1
+    ) + 
+  geom_line(stat = "smooth", method = "lm", formula = 'y ~ x', alpha = 0.5) +
+  # geom_smooth(method=lm, se=FALSE, size = 2) + # alpha does not work in geom_smooth 
+  facet_grid(
+    . ~ group
+    # sex ~ group
+    # generation ~ group
+    ) +
+  theme_bw() +
+  theme(aspect.ratio = 1) 
+```
+
+```{r deg_qq}
+# the "correlation plots" made by Abhay look more like Q-Q plots; hence the name of this chunk
+
+#run the  join_degs() function on all the dfs in the environment
+map2_df(.x = "rpr.cyo_dilp3.ser_m",
+         .y = df_list,
+     .f = join_degs,
+     .id = "ref"
+           ) %>% 
+    mutate(
+      group = case_when(
+        ref == "9"  |ref == "10" ~ "F0 \n rpr.cyo_dilp3.ser",
+        ref == "3"  |ref == "4"~"F1 \n cyo_ser",
+        ref == "11" |ref == "12"~"F1 \n rpr_dilp3",
+        ref == "1"  |ref == "2"~"F1 \n cyo_dilp3",
+        ref == "13" |ref == "14"~"F1 \n rpr_ser",
+        ref == "5"  |ref == "6"~"F2",
+        ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+      group = fct_relevel(group, 
+                          "F0 \n rpr.cyo_dilp3.ser", 
+                          "F1 \n cyo_ser", "F1 \n rpr_dilp3", "F1 \n cyo_dilp3", "F1 \n rpr_ser",
+                          "F2", 
+                          "F3"
+                          ),
+    generation = case_when(
+      group == "F0 \n rpr.cyo_dilp3.ser"~ "F0",
+      group == "F1 \n cyo_ser" ~ "F1",
+      group == "F1 \n rpr_dilp3"  ~ "F1",
+      group == "F1 \n cyo_dilp3" ~ "F1",
+      group == "F1 \n rpr_ser" ~ "F1",
+      group == "F2" ~ "F2",
+      group == "F3" ~ "F3") %>% as_factor(),
+    generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+# the last two variables but without the line break in the group name
+    # group = case_when(
+    #   ref == "9"  |ref == "10" ~ "rpr.cyo_dilp3.ser",
+    #   ref == "3"  |ref == "4"~"cyo_ser",
+    #   ref == "11" |ref == "12"~"rpr_dilp3",
+    #   ref == "1"  |ref == "2"~"cyo_dilp3",
+    #   ref == "13" |ref == "14"~"rpr_ser",
+    #   ref == "5"  |ref == "6"~"F2",
+    #   ref == "7"  |ref == "8"~"F3") %>% as_factor(),
+    # group = fct_relevel(group, "rpr.cyo_dilp3.ser", "cyo_ser", "rpr_dilp3", "cyo_dilp3", "rpr_ser", "F2", "F3"),
+    # generation = case_when(
+    #   group == "rpr.cyo_dilp3.ser"~ "F0",
+    #   group == "cyo_ser" ~ "F1",
+    #   group == "rpr_dilp3"  ~ "F1",
+    #   group == "cyo_dilp3" ~ "F1",
+    #   group == "rpr_ser" ~ "F1",
+    #   group == "F2" ~ "F2",
+    #   group == "F3" ~ "F3") %>% as_factor(),
+    # generation = fct_relevel(generation, "F0", "F1", "F2", "F3"),
+    sex = case_when(
+      ref == "1"|ref == "3"|ref == "5"|ref == "7"|ref == "9"|ref == "11"|ref == "13" ~ "female",
+      TRUE ~ "male") %>% as_factor(),
+       ) %>% 
+  
+  arrange(logFC1) %>% rownames_to_column() %>% mutate(rowname = rowname %>% as.integer()) %>%
+  
+  ggplot(aes(rowname, logFC2, 
+             col = sex,
+  )) + 
+  geom_point(
+    # alpha = 0.20,
+    shape = 20
+  ) +
+  facet_grid(
+    sex ~ group
+  ) +
+  theme_bw() +
+  theme(aspect.ratio = 1) +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) + 
+  geom_point(aes(rowname, logFC1), col = "gray", 
+                                                   # alpha = 0.20, 
+                                                   shape = 20)
+
+# study and generate actual Q-Q plots
+
+```
+
+```{r kegg}
+# f0 females
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_f, 
+                                        as.character(
+                                          rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_f)[back_genes_idx]
+back_genes <- setdiff(back_genes, rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+# intersect(back_genes, rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+# length(back_genes)
+
+# rpr.cyo_dilp3.ser_f <- rpr.cyo_dilp3.ser_f %>% column_to_rownames(var = "probe_id")
+# 
+# geneplotter::multidensity(list(
+#         all = rpr.cyo_dilp3.ser_f[,"AveExpr"] ,
+#         fore = rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% pluck("AveExpr"),
+#         back = rpr.cyo_dilp3.ser_f[rownames(rpr.cyo_dilp3.ser_f) %in% back_genes, "AveExpr"]
+#         ),
+#         col = c("#e46981", "#ae7ee2", "#a7ad4a"),
+#      xlab = "mean expression",
+#    main = "DE genes for CD-background-matching")
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    rpr.cyo_dilp3.ser_f %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    rpr.cyo_dilp3.ser_f %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+library(enrichplot)
+reactome_enrich <- pairwise_termsim(reactome_enrich)
+emapplot(reactome_enrich, showCategory = 10)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f0 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_m, 
+                                        as.character(
+                                          rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    rpr.cyo_dilp3.ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    rpr.cyo_dilp3.ser_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+
+# f1 males
+#####
+# f1 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f1_m, 
+                                        as.character(
+                                          cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f1_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, cyo_ser_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = cyo_ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    cyo_ser_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    cyo_ser_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f2 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f2_m, 
+                                        as.character(
+                                          f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f2_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, f2_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = f2_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    f2_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    f2_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+#####
+# f3 males
+#####
+back_genes_idx <- genefilter::genefinder(eset_f3_m, 
+                                        as.character(
+                                          f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id")
+                                          ), 
+                                        method = "manhattan", scale = "none")
+
+back_genes_idx <- sapply(back_genes_idx, function(x)x$indices)
+
+back_genes <- featureNames(eset_f3_m)[back_genes_idx]
+back_genes <- setdiff(back_genes, f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+
+intersect(back_genes, f3_m %>% filter(qval <= 0.05) %>% pluck("probe_id"))
+length(back_genes)
+
+reactome_enrich <- ReactomePA::enrichPathway(
+  gene = f3_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+  universe = c(
+    f3_m %>% filter(qval <= 0.05) %>% select("entrez_id") %>% drop_na() %>% pluck(1),
+    f3_m %>% rownames_to_column() %>% filter(probe_id %in% back_genes) %>%
+      select("entrez_id") %>% drop_na() %>% pluck(1)
+                ),
+  organism = "fly",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.9, 
+  readable = TRUE)
+
+reactome_enrich@result$Description <- paste0(str_sub(
+                                    reactome_enrich@result$Description, 1, 20),
+                                    "...")
+
+head(as.data.frame(reactome_enrich))[1:6]
+
+barplot(reactome_enrich)
+
+remove(back_genes_idx, back_genes, reactome_enrich)
+```
