@@ -31,7 +31,7 @@ library(tidyverse)
 # Importing data into R
 ```{r get_data}
 
-F0_kp <- read_excel("F0_kp.xlsx", col_types = c("text", "text", "text", "text", "skip", "skip",
+F0_kp <- readxl::read_excel("F0_kp.xlsx", col_types = c("text", "text", "text", "text", "skip", "skip",
                                                 "skip", "text", "text", "text", "text", "text",
                                                 "numeric", "text")
                     )
@@ -40,14 +40,14 @@ F0_kp <- F0_kp |> mutate(
   replicate = replicate |> as.factor(),
   genotype = `sample type` |> factor(levels = c("w1118", "KD")),
   temperature = temperature |> as.factor(),
-  label = paste(genotype, temperature, replicate, sep = "_")
+  label = paste(genotype, temperature, sep = "_") |> as.factor()
 ) |> dplyr::select(cel_file_name, generation, genotype, temperature, replicate, label)
 
 raw_f0 <- ReadAffy(celfile.path = "./kp CEL")
 
 phenoData(raw_f0) <- AnnotatedDataFrame(F0_kp)
 
-sampleNames(raw_f0) <- F0_kp$label
+sampleNames(raw_f0) <- paste(F0_kp$genotype, F0_kp$temperature, F0_kp$replicate, sep = "_")
 
 
 all(colnames(exprs(raw_f0)) == rownames(pData(raw_f0)))
@@ -81,645 +81,104 @@ plotDensities(norm_expression_f0, group = pData(eset_f0)$genotype, legend = "top
               main = "Variation in expression according to genotype (eset_f0)")
 ```
 
+```{r}
+library("arrayQualityMetrics")
+arrayQualityMetrics(expressionset = raw_data[1:4, 1:4], # this can be an AffyBacth object
+                    outdir = "Report_for_raw_data", # directory for saving the output file 'index.html'
+                    force = TRUE, #overwrite existing files of output directory
+                    do.logtransform = TRUE, # log transform the raw ntensities
+                    intgroup = "generation" # the name of the covariate(s) used to colour the plots
+                    )  
+```
+
+
 # Differential expression analysis
 ## Model formula 1: Group-means parametrization 
 ```{r group_means_interaction}
 #####
-pData(eset_f1_f) <- pData(eset_f1_f) %>% 
-  mutate(
-    gtype_clean = case_when( # categorize genotypes into test or control lineages
-      genotype == "rpr/cyo; dilp3/ser" ~ "rpr.cyo_dilp3.ser",
-      genotype == "rpr/+; dilp3/+" ~ "rpr_dilp3",
-      genotype == "cyo/+; dilp3/+" ~ "cyo_dilp3",
-      genotype == "rpr/+; ser/+" ~ "rpr_ser",
-      genotype == "cyo/+; ser/+" ~ "cyo_ser",
-      TRUE ~ "w1118") %>% as_factor())
-
 
 # Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + gtype_clean, data = pData(eset_f1_f))
+design_1 <- model.matrix(~ 0 + label, data = pData(eset_f0))
 
-colnames(design_1) <- levels(pData(eset_f1_f)$gtype_clean)
+colnames(design_1) <- levels(pData(eset_f0)$label)
 colnames(design_1)
 
 # Count the number of samples modeled by each coefficient
 colSums(design_1)
 
 #estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f1_f, design_1, block =  pData(eset_f1_f)$replicate)
+# corfit_1 <- duplicateCorrelation(eset_f0, design_1, block =  pData(eset_f0)$replicate)
 # corfit_1$consensus
 
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
 #fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_mini, design_1, 
-#                      block =  pData(eset)$replicate, 
+# fit_model_1 <- lmFit(eset_f0, design_1,
+#                      block =  pData(eset_f0)$replicate,
 #                      correlation = corfit_1$consensus)
 
 # #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f1_f, design_1)
+fit_model_1 <- lmFit(eset_f0, design_1)
 
 ## Build the contrasts matrix for discovering main effect of genotype in females
 
-cm_f1_f <- makeContrasts(
-  rpr.cyo_dilp3.ser = (rpr.cyo_dilp3.ser - w1118),
-  cyo_ser = (cyo_ser - w1118),
-  rpr_dilp3 = (rpr_dilp3 - w1118),
-  cyo_dilp3 = (cyo_dilp3 - w1118),
-  rpr_ser = (rpr_ser  - w1118),
+cm_f0 <- makeContrasts(
+  t25_v_c25 = (KD_25d - w1118_25d),
+  t16_v_c16 = (KD_16d - w1118_16d),
+  t25_v_t16 = (KD_25d - KD_16d),
+  c25_v_c16 = (w1118_25d - w1118_16d),
+  t25_v_c16 = (KD_25d - w1118_16d),
+  t16_v_c25 = (KD_16d - w1118_25d),
   levels = design_1)
 
-cm_f1_f
+cm_f0
 
 #fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_f)
+fit2_model_1 <- contrasts.fit(fit_model_1, cm_f0)
 
 #set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f1_f <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
+results_f0 <- eBayes(fit2_model_1, 
+                       # trend = TRUE, #accommodates a mean-variance trend;
+                       # robust = TRUE #increases power for some kinds of studies
                        ) 
 
 #Results of all contrasts simultaneously
-decideTests(results_f1_f) %>% summary()
+decideTests(results_f0) %>% summary()
 
 # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f1_f) %>% vennDiagram()
+decideTests(results_f0) %>% vennDiagram()
 
 #A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
 # topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-rpr.cyo_dilp3.ser_f <- topTable(
-  results_f1_f,
+t25_v_c25 <- topTable(
+  results_f0,
   coef=c(1),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-cyo_ser_f <- topTable(
-  results_f1_f,
+t16_v_c16 <- topTable(
+  results_f0,
   coef=c(2),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-rpr_dilp3_f <- topTable(
-  results_f1_f,
+t25_v_t16 <- topTable(
+  results_f0,
   coef=c(3),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-cyo_dilp3_f <- topTable(
-  results_f1_f,
+c25_v_c16 <- topTable(
+  results_f0,
   coef=c(4),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
-rpr_ser_f <- topTable(
-  results_f1_f,
+t25_v_c16 <- topTable(
+  results_f0,
   coef=c(5),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-#####
-pData(eset_f1_m) <- pData(eset_f1_m) %>% 
-  mutate(
-    gtype_clean = case_when( # categorize genotypes into test or control lineages
-      genotype == "rpr/cyo; dilp3/ser" ~ "rpr.cyo_dilp3.ser",
-      genotype == "rpr/+; dilp3/+" ~ "rpr_dilp3",
-      genotype == "cyo/+; dilp3/+" ~ "cyo_dilp3",
-      genotype == "rpr/+; ser/+" ~ "rpr_ser",
-      genotype == "cyo/+; ser/+" ~ "cyo_ser",
-      TRUE ~ "w1118") %>% as_factor())
-
-
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + gtype_clean, data = pData(eset_f1_m))
-
-colnames(design_1) <- levels(pData(eset_f1_m)$gtype_clean)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f1_m, design_1, block =  pData(eset_f1_m)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_mini, design_1, 
-#                      block =  pData(eset)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f1_m, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f1_m <- makeContrasts(
-  rpr.cyo_dilp3.ser = (rpr.cyo_dilp3.ser - w1118),
-  cyo_ser = (cyo_ser - w1118),
-  rpr_dilp3 = (rpr_dilp3 - w1118),
-  cyo_dilp3 = (cyo_dilp3 - w1118),
-  rpr_ser = (rpr_ser  - w1118),
-  levels = design_1)
-
-cm_f1_m
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_m)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f1_m <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f1_m) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f1_m) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-rpr.cyo_dilp3.ser_m <- topTable(
-  results_f1_m,
-  coef=c(1),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-cyo_ser_m <- topTable(
-  results_f1_m,
-  coef=c(2),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_dilp3_m <- topTable(
-  results_f1_m,
-  coef=c(3),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-cyo_dilp3_m <- topTable(
-  results_f1_m,
-  coef=c(4),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_ser_m <- topTable(
-  results_f1_m,
-  coef=c(5),
+  
+t16_v_c25 <- topTable(
+  results_f0,
+  coef=c(6),
   adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
 
 remove(design_1, fit_model_1, fit2_model_1)
-
-hist(rpr.cyo_dilp3.ser_m$P.Value)
-hist(cyo_ser_m$P.Value)
-hist(rpr_dilp3_m$P.Value)
-hist(cyo_dilp3_m$P.Value)
-hist(rpr_ser_m$P.Value)
-#####
-group <- with(pData(eset_f2_f), 
-              paste(generation,
-                    genotype, 
-                    # sex,
-                    # day,
-                    sep = "."))
-
-pData(eset_f2_f)$group <- as.factor(group)
-remove(group)
-
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + group, data = pData(eset_f2_f))
-colnames(design_1) <- levels(pData(eset_f2_f)$group)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f2_f, design_1, block =  pData(eset_f2_f)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_f2_f, design_1, 
-#                      block =  pData(eset_f2_f)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f2_f, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f2_f <- makeContrasts(
-  f2_f = (F2.test - F2.control),
-  levels = design_1)
-
-cm_f2_f
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f2_f)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f2_f <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f2_f) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f2_f) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-f2_f <- topTable(
-  results_f2_f,
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-hist(f2_f$P.Value)
-#####
-group <- with(pData(eset_f2_m), 
-              paste(generation,
-                    genotype, 
-                    # sex,
-                    # day,
-                    sep = "."))
-
-pData(eset_f2_m)$group <- as.factor(group)
-remove(group)
-
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + group, data = pData(eset_f2_m))
-colnames(design_1) <- levels(pData(eset_f2_m)$group)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f2_m, design_1, block =  pData(eset_f2_m)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_f2_m, design_1, 
-#                      block =  pData(eset_f2_m)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f2_m, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f2_m <- makeContrasts(
-  f2_m = (F2.test - F2.control),
-  levels = design_1)
-
-cm_f2_m
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f2_m)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f2_m <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f2_m) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f2_m) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-f2_m <- topTable(
-  results_f2_m,
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-hist(f2_m$P.Value)
-#####
-group <- with(pData(eset_f3_f), 
-              paste(generation,
-                    genotype, 
-                    # sex,
-                    # day,
-                    sep = "."))
-
-pData(eset_f3_f)$group <- as.factor(group)
-remove(group)
-
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + group, data = pData(eset_f3_f))
-colnames(design_1) <- levels(pData(eset_f3_f)$group)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f3_f, design_1, block =  pData(eset_f3_f)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_f3_f, design_1, 
-#                      block =  pData(eset_f3_f)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f3_f, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f3_f <- makeContrasts(
-  f3_f = (F3.test - F3.control),
-  levels = design_1)
-
-cm_f3_f
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f3_f)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f3_f <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f3_f) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f3_f) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-f3_f <- topTable(
-  results_f3_f,
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-hist(f3_f$P.Value)
-#####
-group <- with(pData(eset_f3_m), 
-              paste(generation,
-                    genotype, 
-                    # sex,
-                    # day,
-                    sep = "."))
-
-pData(eset_f3_m)$group <- as.factor(group)
-remove(group)
-
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + group, data = pData(eset_f3_m))
-colnames(design_1) <- levels(pData(eset_f3_m)$group)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f3_m, design_1, block =  pData(eset_f3_m)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_f3_m, design_1, 
-#                      block =  pData(eset_f3_m)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f3_m, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f3_m <- makeContrasts(
-  f3_m = (F3.test - F3.control),
-  levels = design_1)
-
-cm_f3_m
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f3_m)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f3_m <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f3_m) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f3_m) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-f3_m <- topTable(
-  results_f3_m,
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-hist(f3_m$P.Value)
-```
-
-```{r group_means_interaction_2}
-#all F1 compared to F0
-## fewer genes should be different between F0 and rpr;dilp3 than the other three genotypes since they both undergo ablation
-
-#####
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + gtype_clean, data = pData(eset_f1_f))
-
-colnames(design_1) <- levels(pData(eset_f1_f)$gtype_clean)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f1_f, design_1, block =  pData(eset_f1_f)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_mini, design_1, 
-#                      block =  pData(eset)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f1_f, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f1_f <- makeContrasts(
-  cyo_ser = (cyo_ser - rpr.cyo_dilp3.ser),
-  rpr_dilp3 = (rpr_dilp3 - rpr.cyo_dilp3.ser),
-  cyo_dilp3 = (cyo_dilp3 - rpr.cyo_dilp3.ser),
-  rpr_ser = (rpr_ser  - rpr.cyo_dilp3.ser),
-  levels = design_1)
-
-cm_f1_f
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_f)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f1_f <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f1_f) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f1_f) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-
-cyo_ser_f_2 <- topTable(
-  results_f1_f,
-  coef=c(1),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_dilp3_f_2 <- topTable(
-  results_f1_f,
-  coef=c(2),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-cyo_dilp3_f_2 <- topTable(
-  results_f1_f,
-  coef=c(3),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_ser_f_2 <- topTable(
-  results_f1_f,
-  coef=c(4),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
-
-#####
-# Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 
-                         # + day 
-                         + gtype_clean, data = pData(eset_f1_m))
-
-colnames(design_1) <- levels(pData(eset_f1_m)$gtype_clean)
-colnames(design_1)
-
-# Count the number of samples modeled by each coefficient
-colSums(design_1)
-
-#estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f1_m, design_1, block =  pData(eset_f1_m)$replicate)
-# corfit_1$consensus
-
-# corfit_1$consensus <- by_sex$both[[1]]$consensus.correlation
-# corfit_1$cor <- by_sex$both[[1]]$cor
-# corfit_1$atanh.correlations <- by_sex$both[[1]]$atanh.correlations
-
-#fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_mini, design_1, 
-#                      block =  pData(eset)$replicate, 
-#                      correlation = corfit_1$consensus)
-
-# #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f1_m, design_1)
-
-## Build the contrasts matrix for discovering main effect of genotype in females
-
-cm_f1_m <- makeContrasts(
-  cyo_ser = (cyo_ser - rpr.cyo_dilp3.ser),
-  rpr_dilp3 = (rpr_dilp3 - rpr.cyo_dilp3.ser),
-  cyo_dilp3 = (cyo_dilp3 - rpr.cyo_dilp3.ser),
-  rpr_ser = (rpr_ser  - rpr.cyo_dilp3.ser),
-  levels = design_1)
-
-cm_f1_m
-
-#fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f1_m)
-
-#set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f1_m <- eBayes(fit2_model_1, 
-                       trend = TRUE, #accommodates a mean-variance trend; 
-                       robust = TRUE #increases power for some kinds of studies
-                       ) 
-
-#Results of all contrasts simultaneously
-decideTests(results_f1_m) %>% summary()
-
-# #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f1_m) %>% vennDiagram()
-
-#A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
-# topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
-
-cyo_ser_m_2 <- topTable(
-  results_f1_m,
-  coef=c(1),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_dilp3_m_2 <- topTable(
-  results_f1_m,
-  coef=c(2),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-cyo_dilp3_m_2 <- topTable(
-  results_f1_m,
-  coef=c(3),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-rpr_ser_m_2 <- topTable(
-  results_f1_m,
-  coef=c(4),
-  adjust="BH", number = nrow(fit2_model_1), sort.by = "none")
-
-remove(design_1, fit_model_1, fit2_model_1)
-
 ```
 
 ## Empirical null distributions
