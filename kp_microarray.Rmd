@@ -81,13 +81,14 @@ plotDensities(norm_expression_f0, group = pData(eset_f0)$genotype, legend = "top
               main = "Variation in expression according to genotype (eset_f0)")
 ```
 
-```{r}
+```{r qc_metrics eval = FALSE}
 library("arrayQualityMetrics")
-arrayQualityMetrics(expressionset = raw_data[1:4, 1:4], # this can be an AffyBacth object
+
+arrayQualityMetrics(expressionset = raw_f0, # this can be an AffyBacth object
                     outdir = "Report_for_raw_data", # directory for saving the output file 'index.html'
                     force = TRUE, #overwrite existing files of output directory
-                    do.logtransform = TRUE, # log transform the raw ntensities
-                    intgroup = "generation" # the name of the covariate(s) used to colour the plots
+                    do.logtransform = TRUE, # log transform the raw intensities
+                    intgroup = "label" # the name of the covariate(s) used to colour the plots
                     )  
 ```
 
