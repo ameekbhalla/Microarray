@@ -31,17 +31,21 @@ library(tidyverse)
 # Importing data into R
 ```{r get_data}
 
-F0_kp <- readxl::read_excel("F0_kp.xlsx", col_types = c("text", "text", "text", "text", "skip", "skip",
-                                                "skip", "text", "text", "text", "text", "text",
-                                                "numeric", "text")
-                    )
+kp_samples <- read_excel("kp_samples.xlsx", 
+                         col_types = c("text", "text", "skip", 
+                                       "text", "skip", "skip", "skip", "text",
+                                       "skip", "text", "skip", "text", "numeric"))
 
-F0_kp <- F0_kp |> mutate(
+kp_samples <- kp_samples |> mutate(
+  generation = generation |> as.factor(),
+  media = media |> as.factor(),
   replicate = replicate |> as.factor(),
-  genotype = `sample type` |> factor(levels = c("w1118", "KD")),
   temperature = temperature |> as.factor(),
-  label = paste(genotype, temperature, sep = "_") |> as.factor()
-) |> dplyr::select(cel_file_name, generation, genotype, temperature, replicate, label)
+  genotype = case_when( # categorize genotypes into test or control lineages
+    genotype == "w1118" ~ "control",
+    TRUE ~ "test") |> factor(levels = c("control", "test")),
+  label = paste(generation, media, genotype, temperature, sep = "_") |> as.factor()
+  )
 
 raw_f0 <- ReadAffy(celfile.path = "./kp CEL")
 
