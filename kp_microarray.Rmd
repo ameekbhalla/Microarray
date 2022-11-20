@@ -38,7 +38,7 @@ kp_samples <- read_excel("kp_samples.xlsx",
 
 kp_samples <- kp_samples |> mutate(
   generation = generation |> as.factor(),
-  media = media |> as.factor(),
+  media = media |> factor(levels = c("LS", "HS")),
   replicate = replicate |> as.factor(),
   temperature = temperature |> as.factor(),
   genotype = case_when( # categorize genotypes into test or control lineages
@@ -49,9 +49,13 @@ kp_samples <- kp_samples |> mutate(
 
 raw_f0 <- ReadAffy(celfile.path = "./kp CEL")
 
-phenoData(raw_f0) <- AnnotatedDataFrame(F0_kp)
+phenoData(raw_f0) <- AnnotatedDataFrame(kp_samples)
 
-sampleNames(raw_f0) <- paste(F0_kp$genotype, F0_kp$temperature, F0_kp$replicate, sep = "_")
+sampleNames(raw_f0) <- paste(kp_samples$generation, 
+                             kp_samples$genotype, 
+                             kp_samples$temperature, 
+                             kp_samples$replicate,
+                             sep = "_")
 
 
 all(colnames(exprs(raw_f0)) == rownames(pData(raw_f0)))
