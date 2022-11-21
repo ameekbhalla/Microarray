@@ -1,5 +1,7 @@
 ---
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ***
@@ -31,12 +33,10 @@ library(tidyverse)
 # Importing data into R
 ```{r get_data}
 
-kp_samples <- read_excel("kp_samples.xlsx", 
-                         col_types = c("text", "text", "skip", 
-                                       "text", "skip", "skip", "skip", "text",
-                                       "skip", "text", "skip", "text", "numeric"))
+kp_samples <- readxl::read_excel("F0_kp_samples_arranged_coding.xlsx", sheet = "All three generations ")
 
-kp_samples <- kp_samples |> mutate(
+kp_samples <- kp_samples |> dplyr::select(generation, media, replicate, temperature, genotype) |> 
+  mutate(
   generation = generation |> as.factor(),
   media = media |> factor(levels = c("LS", "HS")),
   replicate = replicate |> as.factor(),
@@ -44,60 +44,76 @@ kp_samples <- kp_samples |> mutate(
   genotype = case_when( # categorize genotypes into test or control lineages
     genotype == "w1118" ~ "control",
     TRUE ~ "test") |> factor(levels = c("control", "test")),
+      # code = case_when(
+    # `sample code` == "13T" ~ "13T",
+    # `sample code` == "14T" ~ "14T",
+    # `sample code` == "15T" ~ "15T",
+    # `sample code` == "16T" ~ "16T",
+    # `sample code` == "T1F2" ~ "T1F2",
+    # `sample code` == "T2F2" ~ "T2F2",
+    # `sample code` == "T3F2" ~ "T3F2",
+    # `sample code` == "T4F2" ~ "T4F2",
+    # `sample code` == "T5F2" ~ "T5F2",
+    # TRUE ~ "other"),
   label = paste(generation, media, genotype, temperature, sep = "_") |> as.factor()
   )
 
-raw_f0 <- ReadAffy(celfile.path = "./kp CEL")
+raw <- ReadAffy(celfile.path = "./kp CEL")
 
-phenoData(raw_f0) <- AnnotatedDataFrame(kp_samples)
+which(kp_samples$`sample code` == "9W")
+which(kp_samples$`sample code` == "T2F1")
+# which(kp_samples$`sample code` == "13T")
+# which(kp_samples$`sample code` == "T4F2")
 
-sampleNames(raw_f0) <- paste(kp_samples$generation, 
+kp_samples <- kp_samples[-c(9, 13), ]
+raw <- raw[ , -c(9, 13)]
+
+phenoData(raw) <- AnnotatedDataFrame(kp_samples)
+
+sampleNames(raw) <- paste(kp_samples$generation, 
                              kp_samples$genotype, 
                              kp_samples$temperature, 
                              kp_samples$replicate,
                              sep = "_")
 
+all(colnames(exprs(raw)) == rownames(pData(raw)))
 
-all(colnames(exprs(raw_f0)) == rownames(pData(raw_f0)))
+all(colnames(exprs(raw)) == sampleNames(raw))
 
-all(colnames(exprs(raw_f0)) == sampleNames(raw_f0))
+all(rownames(pData(raw)) == sampleNames(raw))
 
-all(rownames(pData(raw_f0)) == sampleNames(raw_f0))
-
-all(rownames(exprs(raw_f0)) %>% head() == rownames(fData(raw_f0)) %>% head())
+all(rownames(exprs(raw)) %>% head() == rownames(fData(raw)) %>% head())
 
 # one-line check
-validObject(raw_f0)
+validObject(raw)
 
-eset_f0 <- gcrma(raw_f0)
+eset <- gcrma(raw)
 ```
 
-```{r plot_intensities eval = FALSE}
-raw_expression_f0 <- exprs(raw_f0) %>% #plotDensities() accepts only matrix/ExpressionSet objects
+```{r plot_intensities, eval = FALSE}
+raw_expression <- exprs(raw) %>% #plotDensities() accepts only matrix/ExpressionSet objects
                   log2() #the data is log2 scaled to linearize it across different orders of magnitude 
 
+plotDensities(raw_expression, group = pData(raw)$genotype, legend = "topright",
+              main = "Variation in expression according to genotype (raw)")
 
-
-plotDensities(raw_expression_f0, group = pData(raw_f0)$genotype, legend = "topright",
-              main = "Variation in expression according to genotype (raw_f0)")
-
-
-norm_expression_f0 <- exprs(eset_f0) %>% #plotDensities() accepts only matrix/ExpressionSet objects
+norm_expression <- exprs(eset) %>% #plotDensities() accepts only matrix/ExpressionSet objects
                   log2() #the data is log2 scaled to linearize it across different orders of 
 
-plotDensities(norm_expression_f0, group = pData(eset_f0)$genotype, legend = "topright",
-              main = "Variation in expression according to genotype (eset_f0)")
+plotDensities(norm_expression, group = pData(eset)$genotype, legend = "topright",
+              main = "Variation in expression according to genotype (eset)")
 ```
 
 ```{r qc_metrics eval = FALSE}
 library("arrayQualityMetrics")
 
-arrayQualityMetrics(expressionset = raw_f0, # this can be an AffyBacth object
+arrayQualityMetrics(expressionset = raw, # this can be an AffyBacth object
                     outdir = "Report_for_raw_data", # directory for saving the output file 'index.html'
                     force = TRUE, #overwrite existing files of output directory
                     do.logtransform = TRUE, # log transform the raw intensities
                     intgroup = "label" # the name of the covariate(s) used to colour the plots
-                    )  
+                    ) 
+# samples T2F1, 9W are problematic
 ```
 
 
@@ -107,53 +123,53 @@ arrayQualityMetrics(expressionset = raw_f0, # this can be an AffyBacth object
 #####
 
 # Create design matrix with group-means parametrization (no intercept)
-design_1 <- model.matrix(~ 0 + label, data = pData(eset_f0))
+design_1 <- model.matrix(~ 0 + label, data = pData(eset))
 
-colnames(design_1) <- levels(pData(eset_f0)$label)
+colnames(design_1) <- levels(pData(eset)$label)
 colnames(design_1)
 
 # Count the number of samples modeled by each coefficient
 colSums(design_1)
 
 #estimate the correlation between measurements made on the same repliactes:
-# corfit_1 <- duplicateCorrelation(eset_f0, design_1, block =  pData(eset_f0)$replicate)
+# corfit_1 <- duplicateCorrelation(eset, design_1, block =  pData(eset)$replicate)
 # corfit_1$consensus
 
 #fit the linear model fit_model_1 with blocking
-# fit_model_1 <- lmFit(eset_f0, design_1,
-#                      block =  pData(eset_f0)$replicate,
+# fit_model_1 <- lmFit(eset, design_1,
+#                      block =  pData(eset)$replicate,
 #                      correlation = corfit_1$consensus)
 
 # #fit the linear model fit_model_1 without blocking
-fit_model_1 <- lmFit(eset_f0, design_1)
+fit_model_1 <- lmFit(eset, design_1)
 
 ## Build the contrasts matrix for discovering main effect of genotype in females
 
-cm_f0 <- makeContrasts(
-  t25_v_c25 = (KD_25d - w1118_25d),
-  t16_v_c16 = (KD_16d - w1118_16d),
-  t25_v_t16 = (KD_25d - KD_16d),
-  c25_v_c16 = (w1118_25d - w1118_16d),
-  t25_v_c16 = (KD_25d - w1118_16d),
-  t16_v_c25 = (KD_16d - w1118_25d),
+cm <- makeContrasts(
+  f0_t25_v_c25 = (F0_LS_test_25d - F0_LS_control_25d),
+  f0_t16_v_c16 = (F0_LS_test_16d - F0_LS_control_16d),
+  f0_t25_v_t16 = (F0_LS_test_25d - F0_LS_test_16d),
+  f0_c25_v_c16 = (F0_LS_control_25d - F0_LS_control_16d),
+  f1_t25_v_c25 = (F1_HS_test_25d - F1_HS_control_25d),
+  f2_t25_v_c25 = (F2_HS_test_25d - F2_HS_control_25d),
   levels = design_1)
 
-cm_f0
+cm
 
 #fit the contrast matrix
-fit2_model_1 <- contrasts.fit(fit_model_1, cm_f0)
+fit2_model_1 <- contrasts.fit(fit_model_1, cm)
 
 #set trend = TRUE  since the data do not show a uniform variance across all expression intensities (this trend in the variance at different mean intensities is discovered with `plotSA(fit_model)` ) 
-results_f0 <- eBayes(fit2_model_1, 
-                       # trend = TRUE, #accommodates a mean-variance trend;
-                       # robust = TRUE #increases power for some kinds of studies
+results <- eBayes(fit2_model_1, 
+                       trend = TRUE, #accommodates a mean-variance trend;
+                       robust = TRUE #increases power for some kinds of studies
                        ) 
 
 #Results of all contrasts simultaneously
-decideTests(results_f0) %>% summary()
+decideTests(results) %>% summary()
 
 # #Venn diagram showing numbers of genes significant in all contrasts, simultaneously
-decideTests(results_f0) %>% vennDiagram()
+decideTests(results) %>% vennDiagram()
 
 #A list of top genes differentially expressed in a contarst can be obtained by specifying its coef
 # topTable(fit2_model_1, coef=c(1:3), adjust="BH", number = 30)
