@@ -484,5 +484,5 @@ kp_results_list[[7]] <- F1_t25_v_c25 |> rownames_to_column() %>% left_join(anno_
 
 kp_results_list[[8]] <- F2_t25_v_c25 |> rownames_to_column() %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) %>% dplyr::rename(probe_id = rowname, symbol = SYMBOL, gene_name = GENENAME, entrez_id = ENTREZID) |> dplyr::select(-c(t, B, AveExpr))
 
-kp_results <- write_xlsx(kp_results_list)
+write_xlsx(kp_results_list, path = "C:/Users/abhalla/Documents/microarray/kp_results.xlsx")
 ```
