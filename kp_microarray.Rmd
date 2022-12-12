@@ -486,3 +486,20 @@ kp_results_list[[8]] <- F2_t25_v_c25 |> rownames_to_column() %>% left_join(anno_
 
 write_xlsx(kp_results_list, path = "C:/Users/abhalla/Documents/microarray/kp_results.xlsx")
 ```
+
+```{r volcano_plots}
+bind_rows("F0" = F0_t25_v_c25, 
+          "F1" = F1_t25_v_c25, 
+          "F2" = F2_t25_v_c25, 
+          .id = "generation") %>% 
+  mutate(colo = case_when(P.Value <= 0.05 & abs(logFC) >= 0.585 ~ "1", TRUE ~ "0")) %>% 
+  ggplot(aes(x = logFC, y = -log(P.Value, 10), colour = colo)) +
+  geom_point(shape= 20) + 
+  # xlim(-2,2) +
+  ylim(0,10) +
+  scale_color_manual(values = c("darkgray", "red")) +
+  facet_wrap(~ #scales = "free",
+             generation) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
