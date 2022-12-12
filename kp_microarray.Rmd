@@ -496,10 +496,124 @@ bind_rows("F0" = F0_t25_v_c25,
   ggplot(aes(x = logFC, y = -log(P.Value, 10), colour = colo)) +
   geom_point(shape= 20) + 
   # xlim(-2,2) +
-  ylim(0,10) +
+  ylim(0,5) +
   scale_color_manual(values = c("darkgray", "red")) +
   facet_wrap(~ #scales = "free",
              generation) +
+  ylab(label = expression(paste(-Log[10], "(", italic(p), "-value", ")"))) +
+  xlab(label = expression(paste(Log[2], "(Fold Change)"))) + 
   theme_classic() +
   theme(legend.position = "none")
 ```
+
+```{r venn_diagrams}
+f0 <- F0_t25_v_c25 %>% rownames_to_column() |> filter(logFC <= 0.05, P.Value <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+f1 <- F1_t25_v_c25 %>% rownames_to_column() |> filter(logFC <= 0.05, P.Value <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+f2 <- F2_t25_v_c25 %>% rownames_to_column() |> filter(logFC <= 0.05, P.Value <= 0.05) %>% left_join(anno_eset, by = c("rowname" = "PROBEID")) 
+
+
+library(VennDiagram)
+
+# Chart
+venn.diagram(
+        x = list(f0$rowname, f1$rowname),
+        category.names = c("F0" , "F1"),
+        filename = 'F0vF1_venn_diagram.png',
+        disable.logging=T)
+
+venn.diagram(
+        x = list(f1$rowname, f2$rowname),
+        category.names = c("F1" , "F2"),
+        filename = 'F1vF2_venn_diagram.png',
+        disable.logging=T)
+
+venn.diagram(
+        x = list(f0$rowname, f2$rowname),
+        category.names = c("F0" , "F2"),
+        filename = "F0vF2_venn_diagram.png",
+        disable.logging=T)
+
+venn.diagram(
+        x = list(f0$rowname, f1$rowname, f2$rowname),
+        category.names = c("F0" , "F1", "F2"),
+        filename = "F0vF1vF2_venn_diagram.png",
+        disable.logging=T)
+```
+
+```{r deg_correlation}
+#correlation between the logFC values of DE genes that are common between different genotype pairs
+
+#function for finding correlation between DEGs found in different pairs
+correlate_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(P.Value <= 0.05) %>% dplyr::select(rowname, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(P.Value <= 0.05) %>% dplyr::select(rowname, logFC), by = "rowname", suffix = c("1", "2")
+               ) %>% 
+  {cor.test(.$logFC1, .$logFC2)} %>% broom::tidy()
+#the curly brackets are needed to suppress the default behavior of the pipe operator, otherwise the data frame to the left of the pipe would have been forwarded as the third argument into cor(), which only takes two arguments.
+}
+
+#run the correlate_degs() function on all the dfs in the environment
+bind_rows(
+  map2_df(.x = "f0", 
+        .y = "f1",
+        .f = correlate_degs),
+  map2_df(.x = "f1",
+        .y = "f2",
+        .f = correlate_degs),
+    .id = "id"
+  )
+
+#function for finding DEGs that overlap within different pairs
+join_degs <- function(df1, df2){
+  df1 %>% get() %>% filter(P.Value <= 0.05) %>% dplyr::select(rowname, logFC) %>% 
+    inner_join(
+  df2 %>% get() %>% filter(P.Value <= 0.05) %>% dplyr::select(rowname, logFC),
+  by = "rowname", suffix = c("1", "2")
+    ) %>% mutate(comparison = 
+                   paste(rlang::expr_name(df1)|> toupper(), 
+                         "vs", 
+                         rlang::expr_name(df2)|> toupper(), 
+                         sep = " ")
+                 ) # adds the name of the df2 into the group2 column
+  }
+
+#run the  join_degs() function on all the dfs in the environment
+map2_df(.x = "f0", .y = "f0", .f = join_degs) %>% 
+  bind_rows(
+map2_df(.x = "f0", .y = "f1", .f = join_degs)) %>% 
+  bind_rows(
+map2_df(.x = "f1", .y = "f2", .f = join_degs)) %>%   
+  ggplot(aes(logFC1, logFC2)) + 
+  geom_point(
+    alpha = 0.20,
+    shape = 1
+    ) + 
+  geom_line(stat = "smooth", method = "lm", formula = 'y ~ x', alpha = 0.5) +
+  facet_wrap(~ comparison, scales = "fixed") +
+  theme_bw() +
+  theme(aspect.ratio = 1) +
+  ggtitle("Most fold changes negative! Why?")
+```
+
+```{r GO}
+
+library(clusterProfiler)
+
+f0 |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |> 
+  barplot(title = "Biological Processes Enriched Among DE Genes in F0")
+f1 |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |> 
+    barplot(title = "Biological Processes Enriched Among DE Genes in F1")
+f2 |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |>
+    barplot(title = "Biological Processes Enriched Among DE Genes in F2")
+
+
+# # GO common between f0 & f1 generations
+# join_degs("f0", "f1") |> left_join(anno_eset, by = c("rowname" = "PROBEID")) |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |> barplot()
+# 
+# # GO common between f1 & f2 generations: returns error
+# join_degs("f1", "f2") |> left_join(anno_eset, by = c("rowname" = "PROBEID")) |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |> barplot()
+```
+
