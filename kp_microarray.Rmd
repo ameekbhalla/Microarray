@@ -46,6 +46,75 @@ kp_samples <- kp_samples |> dplyr::select(cel_file_name, `sample code`,
   label = paste(generation, genotype, temperature, sep = "_") |> as.factor()
   )
 
+# regenerating the output of above steps in case the xlsx file is unavailable
+# kp_samples <- data.frame(
+#   stringsAsFactors = FALSE,
+#      cel_file_name = c("@52008700992223031419433679647524","@52008700992223031419433679647597",
+#                        "@52008700992223031419433679647562",
+#                        "@52008700992223031419433679647593","@52008700992223031419433679647603",
+#                        "@52008700992223031419433679647601","@52008700992223031419433679647592",
+#                        "@52008700992223031419433679647527",
+#                        "@52008700992223031419433679647544","@52008700992223031419433679647535",
+#                        "@52008700992223031419433679647575",
+#                        "@52008700992223031419433679647594","@52008700992223031419433679647545",
+#                        "@52008700992223031419433679647565",
+#                        "@52008700992223031419433679647585","@52008700992223031419433679647569",
+#                        "@52008700992223031419433679647589_(Drosophila_2)",
+#                        "@52008700949546080816423851715032_(Drosophila_2)",
+#                        "@52008700992223031419433679647547_(Drosophila_2)",
+#                        "@52008700992223031419433679647591_(Drosophila_2)",
+#                        "@52008700992223031419433679647598_(Drosophila_2)",
+#                        "@52008700992223031419433679647600_(Drosophila_2)",
+#                        "@52008700992223031419433679647548_(Drosophila_2)",
+#                        "@52008700992223031419433679647571_(Drosophila_2)",
+#                        "@52008700992223031419433679647610_(Drosophila_2)","@52008700992223031419433679647572_(Drosophila_2)",
+#                        "@52008700992223031419433679647563_(Drosophila_2)",
+#                        "@52008700992213031419433679647427_(Drosophila_2)",
+#                        "@52008700992223031419433679647584_(Drosophila_2)",
+#                        "@52008700992223031419433679647622_(Drosophila_2)",
+#                        "@52008700992223031419433679647549_(Drosophila_2)",
+#                        "@52008700992223031419433679647621_(Drosophila_2)",
+#                        "@52008700992223031419433679647583_(Drosophila_2)",
+#                        "@52008700992213031419433679647476_(Drosophila_2)"),
+#        sample.code = c("1W","2W","3W","4W","5T",
+#                        "6T","7T","8T","9W","10W","11W","12W","13T","14T",
+#                        "15T","16T","C1F1","C2F1","C3F1","C4F1","T1F1",
+#                        "T2F1","T3F1","T4F1","C1F2","C2F2","C3F2","C4F2",
+#                        "C5F2","T1F2","T2F2","T3F2","T4F2","T5F2"),
+#         generation = c("F0","F0","F0","F0","F0",
+#                        "F0","F0","F0","F0","F0","F0","F0","F0","F0","F0",
+#                        "F0","F1","F1","F1","F1","F1","F1","F1","F1",
+#                        "F2","F2","F2","F2","F2","F2","F2","F2","F2","F2"),
+#          replicate = c(1L,2L,3L,4L,1L,2L,3L,4L,
+#                        1L,2L,3L,4L,1L,2L,3L,4L,1L,2L,3L,4L,1L,2L,
+#                        3L,4L,1L,2L,3L,4L,5L,1L,2L,3L,4L,5L),
+#        temperature = c("25d","25d","25d","25d",
+#                        "25d","25d","25d","25d","16d","16d","16d","16d",
+#                        "16d","16d","16d","16d","25d","25d","25d","25d","25d",
+#                        "25d","25d","25d","25d","25d","25d","25d","25d",
+#                        "25d","25d","25d","25d","25d"),
+#           genotype = c("control","control","control",
+#                        "control","test","test","test","test","control",
+#                        "control","control","control","test","test","test",
+#                        "test","control","control","control","control","test",
+#                        "test","test","test","control","control","control",
+#                        "control","control","test","test","test","test",
+#                        "test"),
+#              label = c("F0_control_25d",
+#                        "F0_control_25d","F0_control_25d","F0_control_25d","F0_test_25d",
+#                        "F0_test_25d","F0_test_25d","F0_test_25d",
+#                        "F0_control_16d","F0_control_16d","F0_control_16d","F0_control_16d",
+#                        "F0_test_16d","F0_test_16d","F0_test_16d",
+#                        "F0_test_16d","F1_control_25d","F1_control_25d","F1_control_25d",
+#                        "F1_control_25d","F1_test_25d","F1_test_25d",
+#                        "F1_test_25d","F1_test_25d","F2_control_25d","F2_control_25d",
+#                        "F2_control_25d","F2_control_25d","F2_control_25d",
+#                        "F2_test_25d","F2_test_25d","F2_test_25d","F2_test_25d",
+#                        "F2_test_25d")
+# )
+```
+
+```{r preprocessing}
 raw_all <- ReadAffy(celfile.path = "./kp CEL")
 
 phenoData(raw_all) <- AnnotatedDataFrame(kp_samples)
@@ -62,6 +131,7 @@ eset_all <- gcrma(raw_all)
 
 remove(affinity.spline.coefs)
 ```
+
 
 ```{r qc}
 
@@ -617,3 +687,12 @@ f2 |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENT
 # join_degs("f1", "f2") |> left_join(anno_eset, by = c("rowname" = "PROBEID")) |> dplyr::pull(ENTREZID) |> enrichGO(OrgDb = "drosophila2.db", keyType = "ENTREZID", ont = "BP")  |> barplot()
 ```
 
+```{r GEO_files}
+matrix_F0 <- eset_F0 |> exprs() |> as.data.frame() |> rownames_to_column() |> dplyr::rename(ID_REF = rowname) 
+matrix_F1 <- eset_F1 |> exprs() |> as.data.frame() |> rownames_to_column() |> dplyr::rename(ID_REF = rowname) 
+matrix_F2 <- eset_F2 |> exprs() |> as.data.frame() |> rownames_to_column() |> dplyr::rename(ID_REF = rowname)
+
+left_join(matrix_F0, matrix_F1, by = "ID_REF") |> left_join(matrix_F2, by = "ID_REF") |> write_csv( file = "C:/Users/abhalla/Documents/microarray/matrix_all.csv")
+
+kp_samples |> mutate("Sample name" = paste0(label, "_", replicate)) |> write_csv(file = "C:/Users/abhalla/Documents/microarray/metadata.csv")
+```
